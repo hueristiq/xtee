@@ -4,7 +4,7 @@ import "github.com/logrusorgru/aurora/v3"
 
 const (
 	NAME    = "xtee"
-	VERSION = "0.3.0"
+	VERSION = "0.4.0"
 )
 
 var BANNER = aurora.Sprintf(
