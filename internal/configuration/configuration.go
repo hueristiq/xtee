@@ -3,8 +3,8 @@ package configuration
 import "github.com/logrusorgru/aurora/v3"
 
 const (
-	NAME    string = "xtee"
-	VERSION string = "0.3.0"
+	NAME    = "xtee"
+	VERSION = "0.3.0"
 )
 
 var BANNER = aurora.Sprintf(

@@ -52,10 +52,7 @@ func init() {
 
 func main() {
 	if !stdio.HasStdIn() {
-		fmt.Fprintln(os.Stderr, "[-]", configuration.NAME, "expects input from standard input stream.")
-		fmt.Println("")
-
-		os.Exit(1)
+		hqgolog.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
 	}
 
 	destination := pflag.Arg(0)
@@ -111,7 +108,7 @@ func processInputInSoakMode(uniqueDestinationLinesMap map[string]bool, destinati
 		}
 
 		if !quiet {
-			fmt.Println(line)
+			hqgolog.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
@@ -137,7 +134,7 @@ func processInputInDefaultMode(uniqueDestinationLinesMap map[string]bool, destin
 		}
 
 		if !quiet {
-			fmt.Println(line)
+			hqgolog.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
