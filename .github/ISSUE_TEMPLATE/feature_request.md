@@ -1,7 +1,7 @@
 ---
-name: Feature request
-about: Request feature to implement in this project
-labels: 'Type: Enhancement'
+name: Feature Request
+about: Request a feature to implement in this project
+labels: 'Type: Feature Request'
 ---
 
 ### Please describe your feature request:

@@ -4,9 +4,9 @@ before:
 
 builds:
     -
-        id: xstream-cli
-        main: cmd/xstream/main.go
-        binary: xstream
+        id: xtee-cli
+        main: cmd/xtee/main.go
+        binary: xtee
 
         env:
             - CGO_ENABLED=0
@@ -38,7 +38,7 @@ archives:
     -
         id: tgz
         builds: 
-            - xstream-cli
+            - xtee-cli
         format: tar.gz
         format_overrides:
             -
