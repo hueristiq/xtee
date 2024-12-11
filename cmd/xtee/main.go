@@ -35,10 +35,10 @@ func init() {
 		h := "\nUSAGE:\n"
 		h += fmt.Sprintf(" %s [OPTION]... <FILE>\n", configuration.NAME)
 
-		h += "\nINPUT OPTIONS:\n"
+		h += "\nINPUT:\n"
 		h += "     --soak bool        soak up all input before writing to file\n"
 
-		h += "\nOUTPUT OPTIONS:\n"
+		h += "\nOUTPUT:\n"
 		h += " -u, --unique bool      output unique lines\n"
 		h += " -a, --append bool      append lines to output\n"
 		h += " -q, --quiet bool       suppress output to stdout\n"

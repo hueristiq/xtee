@@ -1,100 +1,77 @@
-# Set the default shell to `/bin/sh` for executing commands in the Makefile.
 SHELL = /bin/sh
 
-# Define the project name for easy reference.
-PROJECT = "xtee"
+PROJECT = xtee
 
-# The default target that gets executed when the `make` command is run without arguments.
-# In this case, it will trigger the `go-build` target.
-all: go-build
+# ------------------------------------------------------------------------------------------------------------------------------
+# --- Prepare | Setup ----------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
 
-# --- Go(Golang) ------------------------------------------------------------------------------------
+.PHONY: prepare
+prepare:
+	@# Install the latest version of Lefthook (a Git hooks manager) and set it up.
+	go install github.com/evilmartians/lefthook@latest && lefthook install
 
-# Define common Go commands with variables for reusability and easier updates.
-GOCMD=go # The main Go command.
-GOMOD=$(GOCMD) mod # Go mod command for managing modules.
-GOGET=$(GOCMD) get # Go get command for retrieving packages.
-GOFMT=$(GOCMD) fmt # Go fmt command for formatting Go code.
-GOTEST=$(GOCMD) test # Go test command for running tests.
-GOBUILD=$(GOCMD) build # Go build command for building binaries.
-GOINSTALL=$(GOCMD) install # Go install command for installing packages.
+# ------------------------------------------------------------------------------------------------------------------------------
+# --- Go (Golang) --------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
 
-# Define Go build flags for verbosity and linking.
-GOFLAGS := -v # Verbose flag for Go commands to print detailed output.
-LDFLAGS := -s -w # Linker flags to strip debug information (-s) and reduce binary size (-w).
+GOCMD=go
+GOCLEAN=$(GOCMD) clean
+GOMOD=$(GOCMD) mod
+GOGET=$(GOCMD) get
+GOFMT=$(GOCMD) fmt
+GOTEST=$(GOCMD) test
+GOBUILD=$(GOCMD) build
+GOINSTALL=$(GOCMD) install
 
-# Set static linking flags for systems that are not macOS (darwin).
-# Static linking allows the binary to include all required libraries in the executable.
+GOFLAGS := -v
+LDFLAGS := -s -w
 ifneq ($(shell go env GOOS),darwin)
 	LDFLAGS := -extldflags "-static"
 endif
 
-# Define Golangci-lint command for linting Go code.
 GOLANGCILINTCMD=golangci-lint
 GOLANGCILINTRUN=$(GOLANGCILINTCMD) run
 
-# --- Go Module Management
+.PHONY: go-mod-clean
+go-mod-clean:
+	$(GOCLEAN) -modcache
 
-# Tidy Go modules
-# This target cleans up `go.mod` and `go.sum` files by removing any unused dependencies.
-# Use this command to ensure that the module files are in a clean state.
 .PHONY: go-mod-tidy
 go-mod-tidy:
 	$(GOMOD) tidy
 
-# Update Go modules
-# This target updates the Go module dependencies to their latest versions.
-# It fetches and updates all modules, and any indirect dependencies.
 .PHONY: go-mod-update
 go-mod-update:
-	$(GOGET) -f -t -u ./... # Update test dependencies.
-	$(GOGET) -f -u ./... # Update other dependencies.
+	@# Update test dependencies.
+	$(GOGET) -f -t -u ./...
+	@# Update all other dependencies.
+	$(GOGET) -f -u ./...
 
-# --- Go Code Quality and Testing
-
-# Format Go code
-# This target formats all Go source files according to Go's standard formatting rules using `go fmt`.
 .PHONY: go-fmt
 go-fmt:
 	$(GOFMT) ./...
 
-# Lint Go code
-# This target lints the Go source code to ensure it adheres to best practices.
-# It uses `golangci-lint` to run various static analysis checks on the code.
-# It first runs the `go-fmt` target to ensure the code is properly formatted.
 .PHONY: go-lint
 go-lint: go-fmt
 	$(GOLANGCILINTRUN) $(GOLANGCILINT) ./...
 
-# Run Go tests
-# This target runs all Go tests in the current module.
-# The `GOFLAGS` flag ensures that tests are run with verbose output, providing more detailed information.
 .PHONY: go-test
 go-test:
 	$(GOTEST) $(GOFLAGS) ./...
 
-# --- Go Build and Install
-
-# Build Go program
-# This target compiles the Go source code and generates a binary in the `bin/` directory.
-# The output binary is named after the project (`xtee`), and the source entry point is the main file in `cmd/$(PROJECT)/main.go`.
-# The `LDFLAGS` flag is passed to optimize the binary size by stripping debug information.
 .PHONY: go-build
 go-build:
 	$(GOBUILD) $(GOFLAGS) -ldflags '$(LDFLAGS)' -o bin/$(PROJECT) cmd/$(PROJECT)/main.go
 
-# Install Go program
-# This target installs the Go program by compiling and placing it in the system's Go bin directory.
-# Use this to make the application globally available on the system.
 .PHONY: go-install
 go-install:
 	$(GOINSTALL) $(GOFLAGS) ./...
 
-# --- Help -----------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
+# --- Help ---------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------
 
-# Display help information
-# This target prints out a detailed list of all available Makefile commands for ease of use.
-# It's a helpful reference for developers using the Makefile.
 .PHONY: help
 help:
 	@echo ""
@@ -106,7 +83,11 @@ help:
 	@echo ""
 	@echo "Available commands:"
 	@echo ""
+	@echo " Preparation | Setup:"
+	@echo "  prepare .................. prepare repository."
+	@echo ""
 	@echo " Go Commands:"
+	@echo "  go-mod-clean ............. Clean Go module cache."
 	@echo "  go-mod-tidy .............. Tidy Go modules."
 	@echo "  go-mod-update ............ Update Go modules."
 	@echo "  go-fmt ................... Format Go code."
@@ -114,7 +95,8 @@ help:
 	@echo "  go-test .................. Run Go tests."
 	@echo "  go-build ................. Build Go program."
 	@echo "  go-install ............... Install Go program."
-	@echo ""
 	@echo " Help Commands:"
-	@echo "  help ..................... Display this help information"
+	@echo "  help ..................... Display this help information."
 	@echo ""
+
+.DEFAULT_GOAL = help

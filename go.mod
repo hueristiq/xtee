@@ -1,6 +1,6 @@
 module github.com/hueristiq/xtee
 
-go 1.23.1
+go 1.23.3
 
 require (
 	github.com/hueristiq/hqgolog v0.0.0-20230623113334-a6018965a34f
@@ -9,6 +9,6 @@ require (
 )
 
 require (
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/term v0.25.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
 )
