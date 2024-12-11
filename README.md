@@ -16,8 +16,8 @@
 * [Contributing](#contributing)
 * [Licensing](#licensing)
 * [Credits](#credits)
-    * [Contributors](#contributors)
-    * [Similar Projects](#similar-projects)
+	* [Contributors](#contributors)
+	* [Similar Projects](#similar-projects)
 
 ## Features
 
