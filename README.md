@@ -129,16 +129,16 @@ __  _| |_ ___  ___
 USAGE:
  xtee [OPTION]... <FILE>
 
-INPUT OPTIONS:
-     --soak bool        soak up all input before writing to file
+INPUT:
+     --soak bool          soak up all input before writing to file
 
-OUTPUT OPTIONS:
- -u, --unique bool      output unique lines
- -a, --append bool      append lines to output
- -q, --quiet bool       suppress output to stdout
- -p, --preview bool     preview new lines, without writing to file
+OUTPUT:
+     --monochrome bool    stdout monochrome output
+ -u, --unique bool        output unique lines
+ -a, --append bool        append lines to output
+ -q, --quiet bool         suppress output to stdout
+ -p, --preview bool       preview new lines, without writing to file
 
-pflag: help requested
 ```
 
 * Appending Unique Lines to File

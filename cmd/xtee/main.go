@@ -7,14 +7,20 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hueristiq/hqgolog"
 	"github.com/hueristiq/xtee/internal/configuration"
+	"github.com/hueristiq/xtee/internal/logger"
+	"github.com/hueristiq/xtee/internal/logger/formatter"
 	"github.com/hueristiq/xtee/pkg/stdio"
+	"github.com/logrusorgru/aurora/v4"
 	"github.com/spf13/pflag"
 )
 
 var (
-	soak           bool
+	au = aurora.New(aurora.WithColors(true))
+
+	soak bool
+
+	monochrome     bool
 	uniqueOutput   bool
 	appendToOutput bool
 	quiet          bool
@@ -23,6 +29,8 @@ var (
 
 func init() {
 	pflag.BoolVar(&soak, "soak", false, "")
+
+	pflag.BoolVar(&monochrome, "monochrome", false, "")
 	pflag.BoolVarP(&uniqueOutput, "unique", "u", false, "")
 	pflag.BoolVarP(&appendToOutput, "append", "a", false, "")
 	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
@@ -30,29 +38,36 @@ func init() {
 
 	pflag.CommandLine.SortFlags = false
 	pflag.Usage = func() {
-		fmt.Fprintln(os.Stderr, configuration.BANNER)
+		logger.Info().Label("").Msg(configuration.BANNER(au))
 
-		h := "\nUSAGE:\n"
+		h := "USAGE:\n"
 		h += fmt.Sprintf(" %s [OPTION]... <FILE>\n", configuration.NAME)
 
 		h += "\nINPUT:\n"
-		h += "     --soak bool        soak up all input before writing to file\n"
+		h += "     --soak bool          soak up all input before writing to file\n"
 
 		h += "\nOUTPUT:\n"
-		h += " -u, --unique bool      output unique lines\n"
-		h += " -a, --append bool      append lines to output\n"
-		h += " -q, --quiet bool       suppress output to stdout\n"
-		h += " -p, --preview bool     preview new lines, without writing to file\n"
+		h += "     --monochrome bool    stdout monochrome output\n"
+		h += " -u, --unique bool        output unique lines\n"
+		h += " -a, --append bool        append lines to output\n"
+		h += " -q, --quiet bool         suppress output to stdout\n"
+		h += " -p, --preview bool       preview new lines, without writing to file\n\n"
 
-		fmt.Fprintln(os.Stderr, h)
+		logger.Info().Label("").Msg(h)
 	}
 
 	pflag.Parse()
+
+	logger.DefaultLogger.SetFormatter(formatter.NewConsoleFormatter(&formatter.ConsoleFormatterConfiguration{
+		Colorize: !monochrome,
+	}))
+
+	au = aurora.New(aurora.WithColors(!monochrome))
 }
 
 func main() {
 	if !stdio.HasStdIn() {
-		hqgolog.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
+		logger.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
 	}
 
 	destination := pflag.Arg(0)
@@ -66,14 +81,14 @@ func main() {
 	if destination != "" && uniqueOutput && appendToOutput {
 		uniqueDestinationLinesMap, err = readFileIntoMap(destination)
 		if err != nil && !os.IsNotExist(err) {
-			hqgolog.Fatal().Msg(err.Error())
+			logger.Fatal().Msg(err.Error())
 		}
 	}
 
 	if destination != "" && !preview {
 		writer, err = getWriteCloser(destination, appendToOutput)
 		if err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+			logger.Fatal().Msg(err.Error())
 		}
 
 		defer writer.Close()
@@ -81,11 +96,11 @@ func main() {
 
 	if soak {
 		if err = processInputInSoakMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+			logger.Fatal().Msg(err.Error())
 		}
 	} else {
 		if err = processInputInDefaultMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+			logger.Fatal().Msg(err.Error())
 		}
 	}
 }
@@ -108,7 +123,7 @@ func processInputInSoakMode(uniqueDestinationLinesMap map[string]bool, destinati
 		}
 
 		if !quiet {
-			hqgolog.Print().Msg(line)
+			logger.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
@@ -134,7 +149,7 @@ func processInputInDefaultMode(uniqueDestinationLinesMap map[string]bool, destin
 		}
 
 		if !quiet {
-			hqgolog.Print().Msg(line)
+			logger.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
