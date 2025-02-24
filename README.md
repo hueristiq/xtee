@@ -2,30 +2,30 @@
 
 ![made with go](https://img.shields.io/badge/made%20with-Go-1E90FF.svg) [![go report card](https://goreportcard.com/badge/github.com/hueristiq/xtee)](https://goreportcard.com/report/github.com/hueristiq/xtee) [![release](https://img.shields.io/github/release/hueristiq/xtee?style=flat&color=1E90FF)](https://github.com/hueristiq/xtee/releases) [![open issues](https://img.shields.io/github/issues-raw/hueristiq/xtee.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/xtee/issues?q=is:issue+is:open) [![closed issues](https://img.shields.io/github/issues-closed-raw/hueristiq/xtee.svg?style=flat&color=1E90FF)](https://github.com/hueristiq/xtee/issues?q=is:issue+is:closed) [![license](https://img.shields.io/badge/license-MIT-gray.svg?color=1E90FF)](https://github.com/hueristiq/xtee/blob/master/LICENSE) ![maintenance](https://img.shields.io/badge/maintained%3F-yes-1E90FF.svg) [![contribution](https://img.shields.io/badge/contributions-welcome-1E90FF.svg)](https://github.com/hueristiq/xtee/blob/master/CONTRIBUTING.md)
 
-`xtee` is a versatile command-line utility handy in taking a single stream of input, from standard input, and splitting it into two outputs, standard output and file.
+`xtee` is a command-line utility designed read `stdin` and write to `stdout` and file.
 
 ## Resources
 
-* [Features](#features)
-* [Installation](#installation)
-	* [Install release binaries (Without Go Installed)](#install-release-binaries-without-go-installed)
-	* [Install source (With Go Installed)](#install-source-with-go-installed)
-		* [`go install ...`](#go-install)
-		* [`go build ...` the development Version](#go-build--the-development-version)
-* [Usage](#usage)
-* [Contributing](#contributing)
-* [Licensing](#licensing)
-* [Credits](#credits)
-	* [Contributors](#contributors)
-	* [Similar Projects](#similar-projects)
+- [Features](#features)
+- [Installation](#installation)
+	- [Install release binaries (Without Go Installed)](#install-release-binaries-without-go-installed)
+	- [Install source (With Go Installed)](#install-source-with-go-installed)
+		- [`go install ...`](#go-install)
+		- [`go build ...` the development Version](#go-build--the-development-version)
+- [Usage](#usage)
+	- [Examples](#examples)
+		- [Appending Unique Lines to File](#appending-unique-lines-to-file)
+		- [Deduplicating Files](#deduplicating-files)
+- [Contributing](#contributing)
+- [Licensing](#licensing)
 
 ## Features
 
-* Splits incoming standard input into standard output and file.
-* Supports soaking up input before writing to output file.
-* Supports appending and overwriting outputs.
-* Supports deduplication.
-* Cross-Platform (Windows, Linux & macOS).
+- Splits incoming standard input into standard output and file.
+- Supports soaking up input before writing to output file.
+- Supports appending and overwriting outputs.
+- Supports deduplication.
+- Cross-Platform (Windows, Linux & macOS).
 
 ## Installation
 
@@ -33,13 +33,13 @@
 
 Visit the [releases page](https://github.com/hueristiq/xtee/releases) and find the appropriate archive for your operating system and architecture. Download the archive from your browser or copy its URL and retrieve it with `wget` or `curl`:
 
-* ...with `wget`:
+- ...with `wget`:
 
 	```bash
 	wget https://github.com/hueristiq/xtee/releases/download/v<version>/xtee-<version>-linux-amd64.tar.gz
 	```
 
-* ...or, with `curl`:
+- ...or, with `curl`:
 
 	```bash
 	curl -OL https://github.com/hueristiq/xtee/releases/download/v<version>/xtee-<version>-linux-amd64.tar.gz
@@ -82,20 +82,20 @@ go install -v github.com/hueristiq/xtee/cmd/xtee@latest
 
 #### `go build ...` the development version
 
-* Clone the repository
+- Clone the repository
 
 	```bash
 	git clone https://github.com/hueristiq/xtee.git 
 	```
 
-* Build the utility
+- Build the utility
 
 	```bash
 	cd xtee/cmd/xtee && \
 	go build .
 	```
 
-* Move the `xtee` binary to somewhere in your `PATH`. For example, on GNU/Linux and OS X systems:
+- Move the `xtee` binary to somewhere in your `PATH`. For example, on GNU/Linux and OS X systems:
 
 	```bash
 	sudo mv xtee /usr/local/bin/
@@ -141,98 +141,125 @@ OUTPUT:
 
 ```
 
-* Appending Unique Lines to File
+### Examples
 
-	```
-	➜  cat stuff.txt
-	one
-	two
-	three
+#### Appending Unique Lines to File
 
-	➜  cat new-stuff.txt
-	zero
-	one
-	two
-	three
-	four
-	five
+```bash
+cat stuff.txt
+```
 
-	➜  cat new-stuff.txt | xtee stuff.txt --append --unique
-	zero
-	four
-	five
+```
+one
+two
+three
+```
 
-	➜  cat stuff.txt
-	one
-	two
-	three
-	zero
-	four
-	five
+```bash
+cat new-stuff.txt
+```
 
-	```
+```
+zero
+one
+two
+three
+four
+five
+```
 
-	Note that the new lines added to `stuff.txt` are also sent to `stdout`, this allows for them to be redirected to another file:
+```bash
+cat new-stuff.txt | xtee stuff.txt --append --unique
+```
 
-	```
-	➜  cat new-stuff.txt | xtee stuff.txt --append --unique > added-lines.txt
-	➜  cat added-lines.txt
-	zero
-	four
-	five
-	```
+```
+zero
+four
+five
+```
 
-* Deduplicating Files
+```bash
+cat stuff.txt
+```
 
-	```
-	➜  cat stuff.txt
-	zero
-	one
-	two
-	three
-	zero
-	four
-	five
-	five
+```
+one
+two
+three
+zero
+four
+five
+```
 
-	➜  cat stuff.txt | xtee stuff.txt --soak --unique
-	zero
-	one
-	two
-	three
-	four
-	five
+Note that the new lines added to `stuff.txt` are also sent to `stdout`, this allows for them to be redirected to another file:
 
-	➜  cat stuff.txt
-	zero
-	one
-	two
-	three
-	four
-	five
+```bash
+cat new-stuff.txt | xtee stuff.txt --append --unique > added-lines.txt
+```
 
-	```
+```bash
+cat added-lines.txt
+```
 
-	Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
+```
+zero
+four
+five
+```
+
+#### Deduplicating Files
+
+```bash
+cat stuff.txt
+```
+
+```
+zero
+one
+two
+three
+zero
+four
+five
+five
+```
+
+```bash
+cat stuff.txt | xtee stuff.txt --soak --unique
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+```bash
+cat stuff.txt
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
 
 ## Contributing
 
-We welcome contributions! Feel free to submit [Pull Requests](https://github.com/hueristiq/xtee/pulls) or report [Issues](https://github.com/hueristiq/xtee/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/xtee/blob/master/CONTRIBUTING.md).
+Feel free to submit [Pull Requests](https://github.com/hueristiq/xtee/pulls) or report [Issues](https://github.com/hueristiq/xtee/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/xtee/blob/master/CONTRIBUTING.md).
+
+Huge thanks to the [contributors](https://github.com/hueristiq/xtee/graphs/contributors) thus far!
+
+![contributors](https://contrib.rocks/image?repo=hueristiq/xtee&max=500)
 
 ## Licensing
 
-This utility is licensed under the [MIT license](https://opensource.org/license/mit). You are free to use, modify, and distribute it, as long as you follow the terms of the license. You can find the full license text in the repository - [Full MIT license text](https://github.com/hueristiq/xtee/blob/master/LICENSE).
-
-## Credits
-
-### Contributors
-
-A huge thanks to all the contributors who have helped make `xtee` what it is today!
-
-[![contributors](https://contrib.rocks/image?repo=hueristiq/xtee&max=500)](https://github.com/hueristiq/xtee/graphs/contributors)
-
-### Similar Projects
-
-If you're interested in more utilities like this, check out:
-
-[tomnomnom/anew](https://github.com/tomnomnom/anew) ◇ [rwese/anew](https://github.com/rwese/anew) ◇ tee (coreutils) ◇ sponge (moreutils)
+This package is licensed under the [MIT license](https://opensource.org/license/mit). You are free to use, modify, and distribute it, as long as you follow the terms of the license. You can find the full license text in the repository - [Full MIT license text](https://github.com/hueristiq/xtee/blob/master/LICENSE).
