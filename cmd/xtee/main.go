@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 
 	"github.com/hueristiq/xtee/internal/configuration"
-	"github.com/hueristiq/xtee/internal/logger"
-	"github.com/hueristiq/xtee/internal/logger/formatter"
-	"github.com/hueristiq/xtee/pkg/stdio"
+	"github.com/hueristiq/xtee/internal/input"
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/spf13/pflag"
+	"go.source.hueristiq.com/logger"
+	"go.source.hueristiq.com/logger/formatter"
 )
 
 var (
@@ -20,23 +20,22 @@ var (
 
 	soak bool
 
-	monochrome     bool
-	uniqueOutput   bool
 	appendToOutput bool
-	quiet          bool
 	preview        bool
+	quiet          bool
+	unique         bool
+	monochrome     bool
 )
 
 func init() {
 	pflag.BoolVar(&soak, "soak", false, "")
 
-	pflag.BoolVar(&monochrome, "monochrome", false, "")
-	pflag.BoolVarP(&uniqueOutput, "unique", "u", false, "")
 	pflag.BoolVarP(&appendToOutput, "append", "a", false, "")
-	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
 	pflag.BoolVarP(&preview, "preview", "p", false, "")
+	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
+	pflag.BoolVar(&unique, "unique", false, "")
+	pflag.BoolVar(&monochrome, "monochrome", false, "")
 
-	pflag.CommandLine.SortFlags = false
 	pflag.Usage = func() {
 		logger.Info().Label("").Msg(configuration.BANNER(au))
 
@@ -47,11 +46,11 @@ func init() {
 		h += "     --soak bool          soak up all input before writing to file\n"
 
 		h += "\nOUTPUT:\n"
-		h += "     --monochrome bool    stdout monochrome output\n"
-		h += " -u, --unique bool        output unique lines\n"
 		h += " -a, --append bool        append lines to output\n"
-		h += " -q, --quiet bool         suppress output to stdout\n"
 		h += " -p, --preview bool       preview new lines, without writing to file\n\n"
+		h += " -q, --quiet bool         suppress output to stdout\n"
+		h += "     --unique bool        output unique lines\n"
+		h += "     --monochrome bool    display no color output\n"
 
 		logger.Info().Label("").Msg(h)
 	}
@@ -66,7 +65,7 @@ func init() {
 }
 
 func main() {
-	if !stdio.HasStdIn() {
+	if !input.HasStdin() {
 		logger.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
 	}
 
@@ -78,7 +77,7 @@ func main() {
 
 	uniqueDestinationLinesMap := map[string]bool{}
 
-	if destination != "" && uniqueOutput && appendToOutput {
+	if destination != "" && unique && appendToOutput {
 		uniqueDestinationLinesMap, err = readFileIntoMap(destination)
 		if err != nil && !os.IsNotExist(err) {
 			logger.Fatal().Msg(err.Error())
@@ -114,7 +113,7 @@ func processInputInSoakMode(uniqueDestinationLinesMap map[string]bool, destinati
 	}
 
 	for _, line := range inputLinesSlice {
-		if uniqueOutput {
+		if unique {
 			if uniqueDestinationLinesMap[line] {
 				continue
 			}
@@ -140,7 +139,7 @@ func processInputInDefaultMode(uniqueDestinationLinesMap map[string]bool, destin
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if uniqueOutput {
+		if unique {
 			if uniqueDestinationLinesMap[line] {
 				continue
 			}
