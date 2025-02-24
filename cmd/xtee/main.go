@@ -53,6 +53,7 @@ func init() {
 		h += "     --monochrome bool    display no color output\n"
 
 		logger.Info().Label("").Msg(h)
+		logger.Print().Msg("")
 	}
 
 	pflag.Parse()
