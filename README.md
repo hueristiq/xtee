@@ -124,7 +124,7 @@ __  _| |_ ___  ___
 \ \/ / __/ _ \/ _ \
  >  <| ||  __/  __/
 /_/\_\\__\___|\___|
-             v0.4.0
+             v0.0.0
 
 USAGE:
  xtee [OPTION]... <FILE>
@@ -133,11 +133,11 @@ INPUT:
      --soak bool          soak up all input before writing to file
 
 OUTPUT:
-     --monochrome bool    stdout monochrome output
- -u, --unique bool        output unique lines
  -a, --append bool        append lines to output
- -q, --quiet bool         suppress output to stdout
+ -u, --unique bool        output unique lines
  -p, --preview bool       preview new lines, without writing to file
+ -q, --quiet bool         suppress output to stdout
+     --monochrome bool    display no color output
 
 ```
 

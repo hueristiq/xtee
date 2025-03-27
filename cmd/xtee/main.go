@@ -16,24 +16,22 @@ import (
 )
 
 var (
-	au = aurora.New(aurora.WithColors(true))
-
-	soak bool
-
+	soak           bool
 	appendToOutput bool
+	unique         bool
 	preview        bool
 	quiet          bool
-	unique         bool
 	monochrome     bool
+
+	au = aurora.New(aurora.WithColors(true))
 )
 
 func init() {
 	pflag.BoolVar(&soak, "soak", false, "")
-
 	pflag.BoolVarP(&appendToOutput, "append", "a", false, "")
+	pflag.BoolVarP(&unique, "unique", "u", false, "")
 	pflag.BoolVarP(&preview, "preview", "p", false, "")
 	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
-	pflag.BoolVar(&unique, "unique", false, "")
 	pflag.BoolVar(&monochrome, "monochrome", false, "")
 
 	pflag.Usage = func() {
@@ -47,9 +45,9 @@ func init() {
 
 		h += "\nOUTPUT:\n"
 		h += " -a, --append bool        append lines to output\n"
-		h += " -p, --preview bool       preview new lines, without writing to file\n\n"
+		h += " -u, --unique bool        output unique lines\n"
+		h += " -p, --preview bool       preview new lines, without writing to file\n"
 		h += " -q, --quiet bool         suppress output to stdout\n"
-		h += "     --unique bool        output unique lines\n"
 		h += "     --monochrome bool    display no color output\n"
 
 		logger.Info().Label("").Msg(h)
