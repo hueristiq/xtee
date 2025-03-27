@@ -254,9 +254,9 @@ Note the use of `--soak`, it makes the utility soak up all its input before writ
 
 ## Contributing
 
-Feel free to submit [Pull Requests](https://github.com/hueristiq/xtee/pulls) or report [Issues](https://github.com/hueristiq/xtee/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/xtee/blob/master/CONTRIBUTING.md).
+Contributions are welcome and encouraged! Feel free to submit [Pull Requests](https://github.com/hueristiq/xtee/pulls) or report [Issues](https://github.com/hueristiq/xtee/issues). For more details, check out the [contribution guidelines](https://github.com/hueristiq/xtee/blob/master/CONTRIBUTING.md).
 
-Huge thanks to the [contributors](https://github.com/hueristiq/xtee/graphs/contributors) thus far!
+A big thank you to all the [contributors](https://github.com/hueristiq/xtee/graphs/contributors) for your ongoing support!
 
 ![contributors](https://contrib.rocks/image?repo=hueristiq/xtee&max=500)
 
