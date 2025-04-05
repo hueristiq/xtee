@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
+	hqgologger "github.com/hueristiq/hq-go-logger"
+	"github.com/hueristiq/hq-go-logger/formatter"
 	"github.com/hueristiq/xtee/internal/configuration"
 	"github.com/hueristiq/xtee/internal/input"
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/spf13/pflag"
-	"go.source.hueristiq.com/logger"
-	"go.source.hueristiq.com/logger/formatter"
 )
 
 var (
@@ -35,7 +35,7 @@ func init() {
 	pflag.BoolVar(&monochrome, "monochrome", false, "")
 
 	pflag.Usage = func() {
-		logger.Info().Label("").Msg(configuration.BANNER(au))
+		hqgologger.Info().Label("").Msg(configuration.BANNER(au))
 
 		h := "USAGE:\n"
 		h += fmt.Sprintf(" %s [OPTION]... <FILE>\n", configuration.NAME)
@@ -50,13 +50,13 @@ func init() {
 		h += " -q, --quiet bool         suppress output to stdout\n"
 		h += "     --monochrome bool    display no color output\n"
 
-		logger.Info().Label("").Msg(h)
-		logger.Print().Msg("")
+		hqgologger.Info().Label("").Msg(h)
+		hqgologger.Print().Msg("")
 	}
 
 	pflag.Parse()
 
-	logger.DefaultLogger.SetFormatter(formatter.NewConsoleFormatter(&formatter.ConsoleFormatterConfiguration{
+	hqgologger.DefaultLogger.SetFormatter(formatter.NewConsoleFormatter(&formatter.ConsoleFormatterConfiguration{
 		Colorize: !monochrome,
 	}))
 
@@ -65,7 +65,7 @@ func init() {
 
 func main() {
 	if !input.HasStdin() {
-		logger.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
+		hqgologger.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
 	}
 
 	destination := pflag.Arg(0)
@@ -79,14 +79,14 @@ func main() {
 	if destination != "" && unique && appendToOutput {
 		uniqueDestinationLinesMap, err = readFileIntoMap(destination)
 		if err != nil && !os.IsNotExist(err) {
-			logger.Fatal().Msg(err.Error())
+			hqgologger.Fatal().Msg(err.Error())
 		}
 	}
 
 	if destination != "" && !preview {
 		writer, err = getWriteCloser(destination, appendToOutput)
 		if err != nil {
-			logger.Fatal().Msg(err.Error())
+			hqgologger.Fatal().Msg(err.Error())
 		}
 
 		defer writer.Close()
@@ -94,11 +94,11 @@ func main() {
 
 	if soak {
 		if err = processInputInSoakMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			logger.Fatal().Msg(err.Error())
+			hqgologger.Fatal().Msg(err.Error())
 		}
 	} else {
 		if err = processInputInDefaultMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			logger.Fatal().Msg(err.Error())
+			hqgologger.Fatal().Msg(err.Error())
 		}
 	}
 }
@@ -121,7 +121,7 @@ func processInputInSoakMode(uniqueDestinationLinesMap map[string]bool, destinati
 		}
 
 		if !quiet {
-			logger.Print().Msg(line)
+			hqgologger.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
@@ -147,7 +147,7 @@ func processInputInDefaultMode(uniqueDestinationLinesMap map[string]bool, destin
 		}
 
 		if !quiet {
-			logger.Print().Msg(line)
+			hqgologger.Print().Msg(line)
 		}
 
 		if !preview && destination != "" {
