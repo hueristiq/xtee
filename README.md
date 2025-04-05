@@ -21,11 +21,11 @@
 
 ## Features
 
-- Splits incoming standard input into standard output and file.
-- Supports soaking up input before writing to output file.
-- Supports appending and overwriting outputs.
-- Supports deduplication.
-- Cross-Platform (Windows, Linux & macOS).
+- Splits incoming standard input into standard output and file
+- Supports soaking up input before writing to output file
+- Supports appending and overwriting outputs
+- Supports deduplication
+- Cross-Platform (Windows, Linux & macOS)
 
 ## Installation
 
