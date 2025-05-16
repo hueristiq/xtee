@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	hqgologger "github.com/hueristiq/hq-go-logger"
-	"github.com/hueristiq/hq-go-logger/formatter"
+	hqgologgerformatter "github.com/hueristiq/hq-go-logger/formatter"
 	"github.com/hueristiq/xtee/internal/configuration"
 	"github.com/hueristiq/xtee/internal/input"
 	"github.com/logrusorgru/aurora/v4"
@@ -56,7 +56,7 @@ func init() {
 
 	pflag.Parse()
 
-	hqgologger.DefaultLogger.SetFormatter(formatter.NewConsoleFormatter(&formatter.ConsoleFormatterConfiguration{
+	hqgologger.DefaultLogger.SetFormatter(hqgologgerformatter.NewConsoleFormatter(&hqgologgerformatter.ConsoleFormatterConfiguration{
 		Colorize: !monochrome,
 	}))
 
