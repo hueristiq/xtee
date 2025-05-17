@@ -249,7 +249,8 @@ four
 five
 ```
 
-Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
+> [!NOTE]
+> Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
 
 #### Appending Lines to File
 
@@ -353,7 +354,8 @@ four
 five
 ```
 
-Note that the new lines added to `stuff.txt` are also sent to `stdout`, this allows for them to be redirected to another file:
+> [!NOTE]
+> Note that the new lines added to `stuff.txt` are also sent to `stdout`, this allows for them to be redirected to another file:
 
 ```bash
 cat new-stuff.txt | xtee stuff.txt --append --unique > added-lines.txt
