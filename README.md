@@ -14,17 +14,21 @@
 		- [`go build ...` the development Version](#go-build--the-development-version)
 - [Usage](#usage)
 	- [Examples](#examples)
-		- [Appending Unique Lines to File](#appending-unique-lines-to-file)
+		- [Basic](#basic)
 		- [Deduplicating Files](#deduplicating-files)
+		- [In-Place Deduplicating Files](#in-place-deduplicating-files)
+		- [Appending Lines to File](#appending-lines-to-file)
+		- [Appending Unique Lines to File](#appending-unique-lines-to-file)
+	- [Performance Considerations](#performance-considerations)
 - [Contributing](#contributing)
 - [Licensing](#licensing)
 
 ## Features
 
-- Splits incoming standard input into standard output and file
-- Supports soaking up input before writing to output file
-- Supports appending and overwriting outputs
-- Supports deduplication
+- Supports streams spliting, incoming standard input into standard output and file
+- Supports soaking up input before writing, enabling safe in-place processing
+- Supports appending and overwriting the destination entirely
+- Supports deduplication, keeping destination unique
 - Cross-Platform (Windows, Linux & macOS)
 
 ## Installation
@@ -130,18 +134,176 @@ USAGE:
  xtee [OPTION]... <FILE>
 
 INPUT:
-     --soak bool          soak up all input before writing to file
+     --soak bool          buffer input before processing
 
 OUTPUT:
- -a, --append bool        append lines to output
- -u, --unique bool        output unique lines
- -p, --preview bool       preview new lines, without writing to file
- -q, --quiet bool         suppress output to stdout
-     --monochrome bool    display no color output
+     --append bool        append lines
+     --unique bool        unique lines
+     --preview bool       preview lines
+ -q, --quiet bool         suppress stdout
+ -m, --monochrome bool    stdout in monochrome
+ -s, --silent bool        stdout in silent mode
+ -v, --verbose bool       stdout in verbose mode
 
 ```
 
 ### Examples
+
+#### Basic
+
+```bash
+echo "zero" | xtee stuff.txt
+```
+
+```bash
+cat stuff.txt
+```
+
+```
+zero
+```
+
+#### Deduplicating Files
+
+```bash
+cat duplicates.txt
+```
+
+```
+zero
+one
+two
+three
+zero
+four
+five
+five
+```
+
+```bash
+cat duplicates.txt | xtee --unique deduplicated.txt
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+```bash
+cat deduplicated.txt
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+#### In-Place Deduplicating Files
+
+```bash
+cat stuff.txt
+```
+
+```
+zero
+one
+two
+three
+zero
+four
+five
+five
+```
+
+```bash
+cat stuff.txt | xtee stuff.txt --soak --unique
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+```bash
+cat stuff.txt
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
+
+#### Appending Lines to File
+
+```bash
+cat stuff.txt
+```
+
+```
+one
+two
+three
+```
+
+```bash
+cat new-stuff.txt
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+```bash
+cat new-stuff.txt | xtee stuff.txt --append 
+```
+
+```
+zero
+one
+two
+three
+four
+five
+```
+
+```bash
+cat stuff.txt
+```
+
+```
+one
+two
+three
+zero
+one
+two
+three
+four
+five
+```
 
 #### Appending Unique Lines to File
 
@@ -207,50 +369,11 @@ four
 five
 ```
 
-#### Deduplicating Files
+### Performance Considerations
 
-```bash
-cat stuff.txt
-```
-
-```
-zero
-one
-two
-three
-zero
-four
-five
-five
-```
-
-```bash
-cat stuff.txt | xtee stuff.txt --soak --unique
-```
-
-```
-zero
-one
-two
-three
-four
-five
-```
-
-```bash
-cat stuff.txt
-```
-
-```
-zero
-one
-two
-three
-four
-five
-```
-
-Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
+- For large files (>1GB), `--soak` mode will use significant memory as it buffers everything
+- `--unique` mode maintains all seen lines in memory - be cautious with huge datasets
+- Stream processing (without `--soak`) is most memory-efficient for large inputs
 
 ## Contributing
 
