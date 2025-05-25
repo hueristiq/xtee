@@ -80,8 +80,6 @@ func init() {
 }
 
 func main() {
-	hqgologger.Info().Label("").Msg(configuration.BANNER(au))
-
 	if !input.HasStdin() {
 		hqgologger.Fatal().Msg("stdin stream expected!")
 	}
