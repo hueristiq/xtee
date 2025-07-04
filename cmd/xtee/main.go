@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	hqgologger "github.com/hueristiq/hq-go-logger"
@@ -17,28 +17,34 @@ import (
 	"github.com/spf13/pflag"
 )
 
+type options struct {
+	soak       bool
+	append     bool
+	unique     bool
+	preview    bool
+	quiet      bool
+	monochrome bool
+	silent     bool
+	verbose    bool
+}
+
 var (
-	soak         bool
-	appendLines  bool
-	uniqueLines  bool
-	previewLines bool
-	quiet        bool
-	monochrome   bool
-	silent       bool
-	verbose      bool
+	o *options
 
 	au = aurora.New(aurora.WithColors(true))
 )
 
 func init() {
-	pflag.BoolVar(&soak, "soak", false, "")
-	pflag.BoolVar(&appendLines, "append", false, "")
-	pflag.BoolVar(&uniqueLines, "unique", false, "")
-	pflag.BoolVar(&previewLines, "preview", false, "")
-	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
-	pflag.BoolVar(&monochrome, "monochrome", false, "")
-	pflag.BoolVar(&silent, "silent", false, "")
-	pflag.BoolVarP(&verbose, "verbose", "v", false, "")
+	o = &options{}
+
+	pflag.BoolVar(&o.soak, "soak", false, "")
+	pflag.BoolVar(&o.append, "append", false, "")
+	pflag.BoolVar(&o.unique, "unique", false, "")
+	pflag.BoolVar(&o.preview, "preview", false, "")
+	pflag.BoolVarP(&o.quiet, "quiet", "q", false, "")
+	pflag.BoolVar(&o.monochrome, "monochrome", false, "")
+	pflag.BoolVar(&o.silent, "silent", false, "")
+	pflag.BoolVarP(&o.verbose, "verbose", "v", false, "")
 
 	pflag.Usage = func() {
 		hqgologger.Info(configuration.BANNER(au), hqgologger.WithLabel(""))
@@ -65,18 +71,18 @@ func init() {
 	pflag.Parse()
 
 	hqgologger.DefaultLogger.SetFormatter(hqgologgerformatter.NewConsoleFormatter(&hqgologgerformatter.ConsoleFormatterConfiguration{
-		Colorize: !monochrome,
+		Colorize: !o.monochrome,
 	}))
 
-	if silent {
+	if o.silent {
 		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent)
 	}
 
-	if verbose {
+	if o.verbose {
 		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug)
 	}
 
-	au = aurora.New(aurora.WithColors(!monochrome))
+	au = aurora.New(aurora.WithColors(!o.monochrome))
 }
 
 func main() {
@@ -86,45 +92,45 @@ func main() {
 
 	destination := pflag.Arg(0)
 
-	if !previewLines && destination == "" {
+	if !o.preview && destination == "" {
 		hqgologger.Fatal("file expected!")
 	}
 
+	var fileWriter *os.File
+
 	var err error
 
-	var unique *sync.Map
-
-	if uniqueLines {
-		unique = &sync.Map{}
-
-		if err = loadExistingLines(destination, unique); err != nil && !os.IsNotExist(err) {
-			hqgologger.Fatal(err.Error())
-		}
-	}
-
-	var writer io.WriteCloser
-
-	if !previewLines {
-		writer, err = getWriteCloser(destination, appendLines)
+	if !o.preview {
+		fileWriter, err = getWriter(destination, o.append)
 		if err != nil {
 			hqgologger.Fatal(err.Error())
 		}
 
-		defer writer.Close()
+		defer fileWriter.Close()
 	}
 
-	if soak {
-		if err = processBufferedInput(unique, writer); err != nil {
+	var existingLines map[string]struct{}
+
+	if o.unique && o.append && !o.preview {
+		existingLines = make(map[string]struct{})
+
+		if err := loadExistingLines(destination, existingLines); err != nil && !os.IsNotExist(err) {
+			hqgologger.Fatal(err.Error())
+		}
+	}
+
+	if o.soak {
+		if err := processBufferedInput(o, existingLines, fileWriter); err != nil {
 			hqgologger.Fatal(err.Error())
 		}
 	} else {
-		if err = processStreamedInput(unique, writer); err != nil {
+		if err := processStreamedInput(o, existingLines, fileWriter); err != nil {
 			hqgologger.Fatal(err.Error())
 		}
 	}
 }
 
-func loadExistingLines(file string, lines *sync.Map) (err error) {
+func loadExistingLines(file string, lines map[string]struct{}) (err error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return
@@ -134,8 +140,12 @@ func loadExistingLines(file string, lines *sync.Map) (err error) {
 
 	scanner := bufio.NewScanner(f)
 
+	buf := make([]byte, 0, 64*1024)
+
+	scanner.Buffer(buf, 1024*1024)
+
 	for scanner.Scan() {
-		lines.Store(scanner.Text(), struct{}{})
+		lines[scanner.Text()] = struct{}{}
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -145,43 +155,109 @@ func loadExistingLines(file string, lines *sync.Map) (err error) {
 	return
 }
 
-func getWriteCloser(file string, appendToFile bool) (writer io.WriteCloser, err error) {
-	if err = os.MkdirAll(filepath.Dir(file), os.ModePerm); err != nil {
+func getWriter(path string, appendToFile bool) (file *os.File, err error) {
+	if err = os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
 		return
 	}
 
 	flags := os.O_CREATE | os.O_WRONLY
-
 	if appendToFile {
 		flags |= os.O_APPEND
 	} else {
 		flags |= os.O_TRUNC
 	}
 
-	if writer, err = os.OpenFile(file, flags, 0o644); err != nil {
+	file, err = os.OpenFile(path, flags, 0o644)
+	if err != nil {
 		return
 	}
 
 	return
 }
 
-func processBufferedInput(uniqueLines *sync.Map, writer io.WriteCloser) (err error) {
-	lines := []string{}
+func processBufferedInput(o *options, existingLines map[string]struct{}, writer *os.File) (err error) {
+	var bufWriter *bufio.Writer
+
+	if !o.preview && writer != nil {
+		bufWriter = bufio.NewWriterSize(writer, 64*1024)
+
+		defer bufWriter.Flush()
+	}
+
+	seen := make(map[string]struct{}, len(existingLines))
+
+	for k := range existingLines {
+		seen[k] = struct{}{}
+	}
 
 	scanner := bufio.NewScanner(os.Stdin)
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	buf := make([]byte, 0, 64*1024)
 
-		lines = append(lines, line)
+	scanner.Buffer(buf, 1024*1024)
+
+	lines := make([]string, 0, 1024)
+
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
 	}
 
 	if err = scanner.Err(); err != nil {
 		return
 	}
 
-	for _, line := range lines {
-		if err = processLine(line, uniqueLines, writer); err != nil {
+	numWorkers := runtime.NumCPU()
+
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	if len(lines) < numWorkers {
+		numWorkers = 1
+	}
+
+	var wg sync.WaitGroup
+
+	chunkSize := (len(lines) + numWorkers - 1) / numWorkers
+	errChan := make(chan error, numWorkers)
+	seenMutex := &sync.Mutex{}
+
+	for i := range numWorkers {
+		start := i * chunkSize
+
+		end := start + chunkSize
+
+		if end > len(lines) {
+			end = len(lines)
+		}
+
+		if start >= end {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(chunk []string) {
+			defer wg.Done()
+
+			for _, line := range chunk {
+				if err = processLine(o, line, seen, seenMutex, bufWriter); err != nil {
+					errChan <- err
+
+					return
+				}
+			}
+		}(lines[start:end])
+	}
+
+	go func() {
+		wg.Wait()
+
+		close(errChan)
+	}()
+
+	for err = range errChan {
+		if err != nil {
 			return
 		}
 	}
@@ -189,13 +265,33 @@ func processBufferedInput(uniqueLines *sync.Map, writer io.WriteCloser) (err err
 	return
 }
 
-func processStreamedInput(uniqueLines *sync.Map, writer io.WriteCloser) (err error) {
+func processStreamedInput(o *options, existingLines map[string]struct{}, writer *os.File) (err error) {
+	var bufWriter *bufio.Writer
+
+	if !o.preview && writer != nil {
+		bufWriter = bufio.NewWriterSize(writer, 64*1024)
+
+		defer bufWriter.Flush()
+	}
+
+	seen := make(map[string]struct{}, len(existingLines))
+
+	for k := range existingLines {
+		seen[k] = struct{}{}
+	}
+
+	seenMutex := &sync.Mutex{}
+
 	scanner := bufio.NewScanner(os.Stdin)
+
+	buf := make([]byte, 0, 64*1024)
+
+	scanner.Buffer(buf, 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if err = processLine(line, uniqueLines, writer); err != nil {
+		if err = processLine(o, line, seen, seenMutex, bufWriter); err != nil {
 			return
 		}
 	}
@@ -207,19 +303,31 @@ func processStreamedInput(uniqueLines *sync.Map, writer io.WriteCloser) (err err
 	return
 }
 
-func processLine(line string, unique *sync.Map, writer io.WriteCloser) (err error) {
-	if uniqueLines {
-		if _, loaded := unique.LoadOrStore(line, struct{}{}); loaded {
+func processLine(o *options, line string, seen map[string]struct{}, mu *sync.Mutex, writer *bufio.Writer) (err error) {
+	if o.unique {
+		mu.Lock()
+
+		if _, exists := seen[line]; exists {
+			mu.Unlock()
+
 			return
 		}
+
+		seen[line] = struct{}{}
+
+		mu.Unlock()
 	}
 
-	if !quiet {
+	if !o.quiet {
 		hqgologger.Print(line)
 	}
 
-	if !previewLines && writer != nil {
-		if _, err = fmt.Fprintln(writer, line); err != nil {
+	if !o.preview && writer != nil {
+		if _, err = writer.WriteString(line); err != nil {
+			return
+		}
+
+		if err = writer.WriteByte('\n'); err != nil {
 			return
 		}
 	}
