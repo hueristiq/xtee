@@ -41,7 +41,7 @@ func init() {
 	pflag.BoolVarP(&verbose, "verbose", "v", false, "")
 
 	pflag.Usage = func() {
-		hqgologger.Info().Label("").Msg(configuration.BANNER(au))
+		hqgologger.Info(configuration.BANNER(au), hqgologger.WithLabel(""))
 
 		h := "USAGE:\n"
 		h += fmt.Sprintf(" %s [OPTION]... <FILE>\n", configuration.NAME)
@@ -58,8 +58,8 @@ func init() {
 		h += " -s, --silent bool        stdout in silent mode\n"
 		h += " -v, --verbose bool       stdout in verbose mode\n"
 
-		hqgologger.Info().Label("").Msg(h)
-		hqgologger.Print().Msg("")
+		hqgologger.Info(h, hqgologger.WithLabel(""))
+		hqgologger.Print("")
 	}
 
 	pflag.Parse()
@@ -81,13 +81,13 @@ func init() {
 
 func main() {
 	if !input.HasStdin() {
-		hqgologger.Fatal().Msg("stdin stream expected!")
+		hqgologger.Fatal("stdin stream expected!")
 	}
 
 	destination := pflag.Arg(0)
 
 	if !previewLines && destination == "" {
-		hqgologger.Fatal().Msg("file expected!")
+		hqgologger.Fatal("file expected!")
 	}
 
 	var err error
@@ -98,7 +98,7 @@ func main() {
 		unique = &sync.Map{}
 
 		if err = loadExistingLines(destination, unique); err != nil && !os.IsNotExist(err) {
-			hqgologger.Fatal().Msg(err.Error())
+			hqgologger.Fatal(err.Error())
 		}
 	}
 
@@ -107,7 +107,7 @@ func main() {
 	if !previewLines {
 		writer, err = getWriteCloser(destination, appendLines)
 		if err != nil {
-			hqgologger.Fatal().Msg(err.Error())
+			hqgologger.Fatal(err.Error())
 		}
 
 		defer writer.Close()
@@ -115,11 +115,11 @@ func main() {
 
 	if soak {
 		if err = processBufferedInput(unique, writer); err != nil {
-			hqgologger.Fatal().Msg(err.Error())
+			hqgologger.Fatal(err.Error())
 		}
 	} else {
 		if err = processStreamedInput(unique, writer); err != nil {
-			hqgologger.Fatal().Msg(err.Error())
+			hqgologger.Fatal(err.Error())
 		}
 	}
 }
@@ -215,7 +215,7 @@ func processLine(line string, unique *sync.Map, writer io.WriteCloser) (err erro
 	}
 
 	if !quiet {
-		hqgologger.Print().Msg(line)
+		hqgologger.Print(line)
 	}
 
 	if !previewLines && writer != nil {

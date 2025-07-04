@@ -1,9 +1,11 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/hueristiq/hq-go-logger v0.0.0-20250405145000-8b9c281d946c h1:8YGZXkSZUKEehtkdQkvDQpVfkWfSid0AL5bcXGoCtgE=
-github.com/hueristiq/hq-go-logger v0.0.0-20250405145000-8b9c281d946c/go.mod h1:9Dw7hEShYMbb20yUAMhZnEoDVQ+u0/XyFXr2znvLZ4M=
+github.com/hueristiq/hq-go-errors v0.0.0-20250606201310-69eb14691c72 h1:Qa5oZ1/keXehFTE5R1XCxIfxJUJbBL8qzCA7bQ69k+Q=
+github.com/hueristiq/hq-go-errors v0.0.0-20250606201310-69eb14691c72/go.mod h1:ya5DHQpi0oeOPTyTpiGb2bW2DadlHbZiQzFciKmoQrk=
 github.com/hueristiq/hq-go-logger v0.0.0-20250515163117-7145cef02603 h1:nxcpTmQo26THGwD7ZvECl1x0FO8JdjzL/kPWlN2dWY0=
 github.com/hueristiq/hq-go-logger v0.0.0-20250515163117-7145cef02603/go.mod h1:9Dw7hEShYMbb20yUAMhZnEoDVQ+u0/XyFXr2znvLZ4M=
+github.com/hueristiq/hq-go-logger v0.0.0-20250608201202-1ee4959bff73 h1:djjCRkqNz8ZjZpN1hhgxocO11wgOXRneZsR/yypx5Qw=
+github.com/hueristiq/hq-go-logger v0.0.0-20250608201202-1ee4959bff73/go.mod h1:foYguCVa3GENBJ2TkorKjadBi+puRN+/kW//kwKi/IU=
 github.com/logrusorgru/aurora/v4 v4.0.0 h1:sRjfPpun/63iADiSvGGjgA1cAYegEWMPCJdUpJYn9JA=
 github.com/logrusorgru/aurora/v4 v4.0.0/go.mod h1:lP0iIa2nrnT/qoFXcOZSrZQpJ1o6n2CUf/hyHi2Q4ZQ=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
