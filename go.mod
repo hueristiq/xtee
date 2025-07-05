@@ -1,14 +1,11 @@
 module github.com/hueristiq/xtee
 
-go 1.23.1
+go 1.24.2
 
 require (
-	github.com/hueristiq/hqgolog v0.0.0-20230623113334-a6018965a34f
-	github.com/logrusorgru/aurora/v3 v3.0.0
-	github.com/spf13/pflag v1.0.5
+	github.com/hueristiq/hq-go-logger v0.0.0-20250608201202-1ee4959bff73
+	github.com/logrusorgru/aurora/v4 v4.0.0
+	github.com/spf13/pflag v1.0.6
 )
 
-require (
-	golang.org/x/sys v0.26.0 // indirect
-	golang.org/x/term v0.25.0 // indirect
-)
+require github.com/hueristiq/hq-go-errors v0.0.0-20250606201310-69eb14691c72 // indirect

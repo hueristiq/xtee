@@ -3,158 +3,135 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 
-	"github.com/hueristiq/hqgolog"
+	hqgologger "github.com/hueristiq/hq-go-logger"
+	hqgologgerformatter "github.com/hueristiq/hq-go-logger/formatter"
+	hqgologgerlevels "github.com/hueristiq/hq-go-logger/levels"
 	"github.com/hueristiq/xtee/internal/configuration"
-	"github.com/hueristiq/xtee/pkg/stdio"
+	"github.com/hueristiq/xtee/internal/input"
+	"github.com/logrusorgru/aurora/v4"
 	"github.com/spf13/pflag"
 )
 
+type options struct {
+	soak       bool
+	append     bool
+	unique     bool
+	preview    bool
+	quiet      bool
+	monochrome bool
+	silent     bool
+	verbose    bool
+}
+
 var (
-	soak           bool
-	uniqueOutput   bool
-	appendToOutput bool
-	quiet          bool
-	preview        bool
+	o *options
+
+	au = aurora.New(aurora.WithColors(true))
 )
 
 func init() {
-	pflag.BoolVar(&soak, "soak", false, "")
-	pflag.BoolVarP(&uniqueOutput, "unique", "u", false, "")
-	pflag.BoolVarP(&appendToOutput, "append", "a", false, "")
-	pflag.BoolVarP(&quiet, "quiet", "q", false, "")
-	pflag.BoolVarP(&preview, "preview", "p", false, "")
+	o = &options{}
 
-	pflag.CommandLine.SortFlags = false
+	pflag.BoolVar(&o.soak, "soak", false, "")
+	pflag.BoolVar(&o.append, "append", false, "")
+	pflag.BoolVar(&o.unique, "unique", false, "")
+	pflag.BoolVar(&o.preview, "preview", false, "")
+	pflag.BoolVarP(&o.quiet, "quiet", "q", false, "")
+	pflag.BoolVar(&o.monochrome, "monochrome", false, "")
+	pflag.BoolVar(&o.silent, "silent", false, "")
+	pflag.BoolVarP(&o.verbose, "verbose", "v", false, "")
+
 	pflag.Usage = func() {
-		fmt.Fprintln(os.Stderr, configuration.BANNER)
+		hqgologger.Info(configuration.BANNER(au), hqgologger.WithLabel(""))
 
-		h := "\nUSAGE:\n"
+		h := "USAGE:\n"
 		h += fmt.Sprintf(" %s [OPTION]... <FILE>\n", configuration.NAME)
 
-		h += "\nINPUT OPTIONS:\n"
-		h += "     --soak bool        soak up all input before writing to file\n"
+		h += "\nINPUT:\n"
+		h += "     --soak bool          buffer input before processing\n"
 
-		h += "\nOUTPUT OPTIONS:\n"
-		h += " -u, --unique bool      output unique lines\n"
-		h += " -a, --append bool      append lines to output\n"
-		h += " -q, --quiet bool       suppress output to stdout\n"
-		h += " -p, --preview bool     preview new lines, without writing to file\n"
+		h += "\nOUTPUT:\n"
+		h += "     --append bool        append lines\n"
+		h += "     --unique bool        unique lines\n"
+		h += "     --preview bool       preview lines\n"
+		h += " -q, --quiet bool         suppress stdout\n"
+		h += " -m, --monochrome bool    stdout in monochrome\n"
+		h += " -s, --silent bool        stdout in silent mode\n"
+		h += " -v, --verbose bool       stdout in verbose mode\n"
 
-		fmt.Fprintln(os.Stderr, h)
+		hqgologger.Info(h, hqgologger.WithLabel(""))
+		hqgologger.Print("")
 	}
 
 	pflag.Parse()
+
+	hqgologger.DefaultLogger.SetFormatter(hqgologgerformatter.NewConsoleFormatter(&hqgologgerformatter.ConsoleFormatterConfiguration{
+		Colorize: !o.monochrome,
+	}))
+
+	if o.silent {
+		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent)
+	}
+
+	if o.verbose {
+		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug)
+	}
+
+	au = aurora.New(aurora.WithColors(!o.monochrome))
 }
 
 func main() {
-	if !stdio.HasStdIn() {
-		hqgolog.Fatal().Msgf(configuration.NAME + " expects input from standard input stream.")
+	if !input.HasStdin() {
+		hqgologger.Fatal("stdin stream expected!")
 	}
 
 	destination := pflag.Arg(0)
 
+	if !o.preview && destination == "" {
+		hqgologger.Fatal("file expected!")
+	}
+
+	var fileWriter *os.File
+
 	var err error
 
-	var writer io.WriteCloser
-
-	uniqueDestinationLinesMap := map[string]bool{}
-
-	if destination != "" && uniqueOutput && appendToOutput {
-		uniqueDestinationLinesMap, err = readFileIntoMap(destination)
-		if err != nil && !os.IsNotExist(err) {
-			hqgolog.Fatal().Msg(err.Error())
-		}
-	}
-
-	if destination != "" && !preview {
-		writer, err = getWriteCloser(destination, appendToOutput)
+	if !o.preview {
+		fileWriter, err = getWriter(destination, o.append)
 		if err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+			hqgologger.Fatal(err.Error())
 		}
 
-		defer writer.Close()
+		defer fileWriter.Close()
 	}
 
-	if soak {
-		if err = processInputInSoakMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+	var existingLines map[string]struct{}
+
+	if o.unique && o.append && !o.preview {
+		existingLines = make(map[string]struct{})
+
+		if err := loadExistingLines(destination, existingLines); err != nil && !os.IsNotExist(err) {
+			hqgologger.Fatal(err.Error())
+		}
+	}
+
+	if o.soak {
+		if err := processBufferedInput(o, existingLines, fileWriter); err != nil {
+			hqgologger.Fatal(err.Error())
 		}
 	} else {
-		if err = processInputInDefaultMode(uniqueDestinationLinesMap, destination, writer); err != nil {
-			hqgolog.Fatal().Msg(err.Error())
+		if err := processStreamedInput(o, existingLines, fileWriter); err != nil {
+			hqgologger.Fatal(err.Error())
 		}
 	}
 }
 
-func processInputInSoakMode(uniqueDestinationLinesMap map[string]bool, destination string, df io.WriteCloser) (err error) {
-	var inputLinesSlice []string
-
-	inputLinesSlice, err = readStdinIntoSlice()
-	if err != nil {
-		return
-	}
-
-	for _, line := range inputLinesSlice {
-		if uniqueOutput {
-			if uniqueDestinationLinesMap[line] {
-				continue
-			}
-
-			uniqueDestinationLinesMap[line] = true
-		}
-
-		if !quiet {
-			hqgolog.Print().Msg(line)
-		}
-
-		if !preview && destination != "" {
-			fmt.Fprintf(df, "%s\n", line)
-		}
-	}
-
-	return
-}
-
-func processInputInDefaultMode(uniqueDestinationLinesMap map[string]bool, destination string, df io.WriteCloser) (err error) {
-	scanner := bufio.NewScanner(os.Stdin)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if uniqueOutput {
-			if uniqueDestinationLinesMap[line] {
-				continue
-			}
-
-			uniqueDestinationLinesMap[line] = true
-		}
-
-		if !quiet {
-			hqgolog.Print().Msg(line)
-		}
-
-		if !preview && destination != "" {
-			fmt.Fprintf(df, "%s\n", line)
-		}
-	}
-
-	if err = scanner.Err(); err != nil {
-		return
-	}
-
-	return
-}
-
-func readFileIntoMap(file string) (lines map[string]bool, err error) {
-	lines = map[string]bool{}
-
-	var f *os.File
-
-	f, err = os.Open(file)
+func loadExistingLines(file string, lines map[string]struct{}) (err error) {
+	f, err := os.Open(file)
 	if err != nil {
 		return
 	}
@@ -163,14 +140,12 @@ func readFileIntoMap(file string) (lines map[string]bool, err error) {
 
 	scanner := bufio.NewScanner(f)
 
+	buf := make([]byte, 0, 64*1024)
+
+	scanner.Buffer(buf, 1024*1024)
+
 	for scanner.Scan() {
-		line := scanner.Text()
-
-		if _, ok := lines[line]; ok {
-			continue
-		}
-
-		lines[line] = true
+		lines[scanner.Text()] = struct{}{}
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -180,37 +155,181 @@ func readFileIntoMap(file string) (lines map[string]bool, err error) {
 	return
 }
 
-func getWriteCloser(file string, appendToFile bool) (writer io.WriteCloser, err error) {
-	directory := filepath.Dir(file)
+func getWriter(path string, appendToFile bool) (file *os.File, err error) {
+	if err = os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+		return
+	}
 
-	if _, err = os.Stat(directory); os.IsNotExist(err) {
-		if err = os.MkdirAll(directory, os.ModePerm); err != nil {
+	flags := os.O_CREATE | os.O_WRONLY
+	if appendToFile {
+		flags |= os.O_APPEND
+	} else {
+		flags |= os.O_TRUNC
+	}
+
+	file, err = os.OpenFile(path, flags, 0o644)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func processBufferedInput(o *options, existingLines map[string]struct{}, writer *os.File) (err error) {
+	var bufWriter *bufio.Writer
+
+	if !o.preview && writer != nil {
+		bufWriter = bufio.NewWriterSize(writer, 64*1024)
+
+		defer bufWriter.Flush()
+	}
+
+	seen := make(map[string]struct{}, len(existingLines))
+
+	for k := range existingLines {
+		seen[k] = struct{}{}
+	}
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	buf := make([]byte, 0, 64*1024)
+
+	scanner.Buffer(buf, 1024*1024)
+
+	lines := make([]string, 0, 1024)
+
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if err = scanner.Err(); err != nil {
+		return
+	}
+
+	numWorkers := runtime.NumCPU()
+
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	if len(lines) < numWorkers {
+		numWorkers = 1
+	}
+
+	var wg sync.WaitGroup
+
+	chunkSize := (len(lines) + numWorkers - 1) / numWorkers
+	errChan := make(chan error, numWorkers)
+	seenMutex := &sync.Mutex{}
+
+	for i := range numWorkers {
+		start := i * chunkSize
+
+		end := start + chunkSize
+
+		if end > len(lines) {
+			end = len(lines)
+		}
+
+		if start >= end {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(chunk []string) {
+			defer wg.Done()
+
+			for _, line := range chunk {
+				if err = processLine(o, line, seen, seenMutex, bufWriter); err != nil {
+					errChan <- err
+
+					return
+				}
+			}
+		}(lines[start:end])
+	}
+
+	go func() {
+		wg.Wait()
+
+		close(errChan)
+	}()
+
+	for err = range errChan {
+		if err != nil {
 			return
 		}
 	}
 
-	if appendToFile {
-		writer, err = os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	} else {
-		writer, err = os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	return
+}
+
+func processStreamedInput(o *options, existingLines map[string]struct{}, writer *os.File) (err error) {
+	var bufWriter *bufio.Writer
+
+	if !o.preview && writer != nil {
+		bufWriter = bufio.NewWriterSize(writer, 64*1024)
+
+		defer bufWriter.Flush()
+	}
+
+	seen := make(map[string]struct{}, len(existingLines))
+
+	for k := range existingLines {
+		seen[k] = struct{}{}
+	}
+
+	seenMutex := &sync.Mutex{}
+
+	scanner := bufio.NewScanner(os.Stdin)
+
+	buf := make([]byte, 0, 64*1024)
+
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if err = processLine(o, line, seen, seenMutex, bufWriter); err != nil {
+			return
+		}
+	}
+
+	if err = scanner.Err(); err != nil {
+		return
 	}
 
 	return
 }
 
-func readStdinIntoSlice() (lines []string, err error) {
-	lines = []string{}
+func processLine(o *options, line string, seen map[string]struct{}, mu *sync.Mutex, writer *bufio.Writer) (err error) {
+	if o.unique {
+		mu.Lock()
 
-	scanner := bufio.NewScanner(os.Stdin)
+		if _, exists := seen[line]; exists {
+			mu.Unlock()
 
-	for scanner.Scan() {
-		line := scanner.Text()
+			return
+		}
 
-		lines = append(lines, line)
+		seen[line] = struct{}{}
+
+		mu.Unlock()
 	}
 
-	if err = scanner.Err(); err != nil {
-		return
+	if !o.quiet {
+		hqgologger.Print(line)
+	}
+
+	if !o.preview && writer != nil {
+		if _, err = writer.WriteString(line); err != nil {
+			return
+		}
+
+		if err = writer.WriteByte('\n'); err != nil {
+			return
+		}
 	}
 
 	return
