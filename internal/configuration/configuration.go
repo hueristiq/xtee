@@ -4,7 +4,7 @@ import "github.com/logrusorgru/aurora/v4"
 
 const (
 	NAME    = "xtee"
-	VERSION = "0.0.0"
+	VERSION = "1.0.0"
 )
 
 var BANNER = func(au *aurora.Aurora) (banner string) {
