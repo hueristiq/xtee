@@ -4,13 +4,12 @@ package configuration
 
 import "github.com/logrusorgru/aurora/v4"
 
-const (
-	// Name is the program's command name as shown in usage output.
-	Name = "xtee"
+// Name is the program's command name as shown in usage output.
+const Name = "xtee"
 
-	// Version is the program's semantic version, rendered in the banner.
-	Version = "1.0.0"
-)
+// Version is the program's semantic version, rendered in the banner. It is
+// stamped at build time via -ldflags (see the Makefile and .goreleaser.yaml).
+var Version = "0.0.0"
 
 // Banner returns the ASCII-art startup banner with the version rendered in
 // bright red, bold, and italic.

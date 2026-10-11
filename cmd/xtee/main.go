@@ -9,9 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
-	hqgologger "github.com/hueristiq/hq-go-logger"
-	hqgologgerformatter "github.com/hueristiq/hq-go-logger/formatter"
-	hqgologgerlevels "github.com/hueristiq/hq-go-logger/levels"
+	hqgologger "github.com/hueristiq/hq-lib-logger-go"
+	hqgologgerformatter "github.com/hueristiq/hq-lib-logger-go/formatter"
+	hqgologgerlevels "github.com/hueristiq/hq-lib-logger-go/levels"
 	"github.com/hueristiq/xtee/internal/configuration"
 	"github.com/hueristiq/xtee/internal/input"
 	"github.com/logrusorgru/aurora/v4"
