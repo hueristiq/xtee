@@ -34,7 +34,7 @@ builds:
         flags:
             - -trimpath
         ldflags:
-            - -s -w -X github.com/hueristiq/xtee/internal/configuration.VERSION={{.Version}}
+            - -s -w -X github.com/hueristiq/xtee/internal/configuration.Version={{.Version}}
 
 snapshot:
     version_template: "{{ .Tag }}-next"

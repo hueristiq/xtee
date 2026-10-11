@@ -42,7 +42,7 @@ go-test:
 	go test -v -race ./...
 
 go-build:
-	go build -v -ldflags "-s -w -X $(MODULE)/internal/configuration.VERSION=$(VERSION)" -o bin/$(BINARY) cmd/$(BINARY)/main.go
+	go build -v -ldflags "-s -w -X $(MODULE)/internal/configuration.Version=$(VERSION)" -o bin/$(BINARY) cmd/$(BINARY)/main.go
 
 go-install:
 	go install -v ./...
