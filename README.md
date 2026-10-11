@@ -25,7 +25,7 @@
 
 ## Features
 
-- Supports streams spliting, incoming standard input into standard output and file
+- Supports streams splitting, incoming standard input into standard output and file
 - Supports soaking up input before writing, enabling safe in-place processing
 - Supports appending and overwriting the destination entirely
 - Supports deduplication, keeping destination unique
@@ -141,9 +141,9 @@ OUTPUT:
      --unique bool        unique lines
      --preview bool       preview lines
  -q, --quiet bool         suppress stdout
- -m, --monochrome bool    stdout in monochrome
- -s, --silent bool        stdout in silent mode
- -v, --verbose bool       stdout in verbose mode
+ -m, --monochrome bool    disable colored console output
+ -s, --silent bool        disable logging output, only results
+ -v, --verbose bool       enable detailed debug logging output
 
 ```
 
@@ -373,9 +373,10 @@ five
 
 ### Performance Considerations
 
-- For large files (>1GB), `--soak` mode will use significant memory as it buffers everything
-- `--unique` mode maintains all seen lines in memory - be cautious with huge datasets
-- Stream processing (without `--soak`) is most memory-efficient for large inputs
+- Stream processing (without `--soak`) is the most memory-efficient mode: memory use is constant, and lines are written as they arrive.
+- `--soak` buffers the entire input before writing (enabling safe in-place processing), using roughly the input size plus 8 bytes per line of memory - use it only when the input comfortably fits in RAM.
+- `--unique` keeps every unique line seen so far in memory, in both streaming and soak modes - be cautious with huge datasets.
+- Lines longer than 8 MB are rejected; processing stops with an error.
 
 ## Contributing
 
