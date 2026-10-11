@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"hash/maphash"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,10 +13,11 @@ import (
 	hqgologger "github.com/hueristiq/hq-lib-logger-go"
 	hqgologgerformatter "github.com/hueristiq/hq-lib-logger-go/formatter"
 	hqgologgerlevels "github.com/hueristiq/hq-lib-logger-go/levels"
-	"github.com/hueristiq/xtee/internal/configuration"
-	"github.com/hueristiq/xtee/internal/input"
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/spf13/pflag"
+
+	"github.com/hueristiq/xtee/internal/configuration"
+	"github.com/hueristiq/xtee/internal/input"
 )
 
 const (
@@ -34,11 +36,25 @@ type options struct {
 	verbose    bool
 }
 
+type stats struct {
+	read    int
+	written int
+	skipped int
+}
+
 func main() {
 	o := parseFlags()
 
 	if !input.HasStdin() {
 		hqgologger.Fatal("stdin stream expected!")
+	}
+
+	if pflag.NArg() > 1 {
+		hqgologger.Fatal("multiple files are not supported; provide exactly one destination!")
+	}
+
+	if o.preview && o.quiet {
+		hqgologger.Fatal("--preview and --quiet cannot be used together!")
 	}
 
 	destination := pflag.Arg(0)
@@ -67,7 +83,7 @@ func parseFlags() (o *options) {
 	pflag.Usage = func() {
 		au := aurora.New(aurora.WithColors(!o.monochrome))
 
-		hqgologger.Info(configuration.Banner(au), hqgologger.WithoutTimestamp(), hqgologger.WithoutLabel())
+		hqgologger.Print(configuration.Banner(au), hqgologger.WithoutTimestamp(), hqgologger.WithoutLabel())
 
 		h := "USAGE:\n"
 		h += " " + configuration.Name + " [OPTION]... <FILE>\n"
@@ -84,8 +100,7 @@ func parseFlags() (o *options) {
 		h += " -s, --silent bool        disable logging output, only results\n"
 		h += " -v, --verbose bool       enable detailed debug logging output\n"
 
-		hqgologger.Info(h, hqgologger.WithoutTimestamp(), hqgologger.WithoutLabel())
-		hqgologger.Print("", hqgologger.WithoutTimestamp(), hqgologger.WithoutLabel())
+		hqgologger.Print(h, hqgologger.WithoutTimestamp(), hqgologger.WithoutLabel())
 	}
 
 	pflag.Parse()
@@ -94,12 +109,14 @@ func parseFlags() (o *options) {
 		Colorize: !o.monochrome,
 	}))
 
-	if o.silent {
-		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent)
-	}
+	_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelInfo) // level constants are valid by construction
 
 	if o.verbose {
-		hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug)
+		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug) // level constants are valid by construction
+	}
+
+	if o.silent {
+		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent) // level constants are valid by construction
 	}
 
 	return o
@@ -114,6 +131,11 @@ func run(o *options, destination string, stdin io.Reader) (err error) {
 }
 
 func runStreamed(o *options, destination string, stdin io.Reader) (err error) {
+	seen, err := loadSeen(o, destination)
+	if err != nil {
+		return err
+	}
+
 	var file *os.File
 
 	if !o.preview {
@@ -121,29 +143,30 @@ func runStreamed(o *options, destination string, stdin io.Reader) (err error) {
 		if err != nil {
 			return err
 		}
+
+		hqgologger.Debug(fmt.Sprintf("destination %q opened", destination))
 	}
 
-	var writer *bufio.Writer
+	var fileWriter *bufio.Writer
 
 	if file != nil {
-		writer = bufio.NewWriterSize(file, ioBufferSize)
+		fileWriter = bufio.NewWriterSize(file, ioBufferSize)
 	}
+
+	stdoutWriter := newStdoutWriter(o)
 
 	defer func() {
-		err = errors.Join(err, teardown(writer, file))
+		err = errors.Join(err, teardown(stdoutWriter, fileWriter, file))
 	}()
 
-	seen, err := loadSeen(o, destination)
-	if err != nil {
-		return err
-	}
+	st := &stats{}
 
 	scanner := bufio.NewScanner(bufio.NewReaderSize(stdin, ioBufferSize))
 
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineLength)
 
 	for scanner.Scan() {
-		if err := emit(o, scanner.Bytes(), seen, writer); err != nil {
+		if err := emit(o, scanner.Bytes(), seen, stdoutWriter, fileWriter, st); err != nil {
 			return err
 		}
 	}
@@ -151,6 +174,8 @@ func runStreamed(o *options, destination string, stdin io.Reader) (err error) {
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("scanning input: %w", err)
 	}
+
+	logStats(st)
 
 	return nil
 }
@@ -161,6 +186,8 @@ func runSoaked(o *options, destination string, stdin io.Reader) (err error) {
 		return err
 	}
 
+	hqgologger.Debug(fmt.Sprintf("soaked %d bytes in %d lines", len(data), len(starts)))
+
 	seen, err := loadSeen(o, destination)
 	if err != nil {
 		return err
@@ -173,17 +200,23 @@ func runSoaked(o *options, destination string, stdin io.Reader) (err error) {
 		if err != nil {
 			return err
 		}
+
+		hqgologger.Debug(fmt.Sprintf("destination %q opened", destination))
 	}
 
-	var writer *bufio.Writer
+	var fileWriter *bufio.Writer
 
 	if file != nil {
-		writer = bufio.NewWriterSize(file, ioBufferSize)
+		fileWriter = bufio.NewWriterSize(file, ioBufferSize)
 	}
 
+	stdoutWriter := newStdoutWriter(o)
+
 	defer func() {
-		err = errors.Join(err, teardown(writer, file))
+		err = errors.Join(err, teardown(stdoutWriter, fileWriter, file))
 	}()
+
+	st := &stats{}
 
 	for i, start := range starts {
 		end := len(data)
@@ -202,10 +235,16 @@ func runSoaked(o *options, destination string, stdin io.Reader) (err error) {
 			line = line[:len(line)-1]
 		}
 
-		if err := emit(o, line, seen, writer); err != nil {
+		if len(line) > maxLineLength {
+			return fmt.Errorf("line %d exceeds the maximum line length of %d bytes", i+1, maxLineLength)
+		}
+
+		if err := emit(o, line, seen, stdoutWriter, fileWriter, st); err != nil {
 			return err
 		}
 	}
+
+	logStats(st)
 
 	return nil
 }
@@ -232,50 +271,80 @@ func soakInput(r io.Reader) (data []byte, starts []int, err error) {
 	return data, starts, nil
 }
 
-func emit(o *options, line []byte, seen map[string]struct{}, writer *bufio.Writer) (err error) {
+func emit(o *options, line []byte, seen *lineSet, stdoutWriter, fileWriter *bufio.Writer, st *stats) (err error) {
+	st.read++
+
 	if o.unique {
-		if _, exists := seen[string(line)]; exists {
+		if seen.contains(line) {
+			st.skipped++
+
 			return nil
 		}
 
-		seen[string(line)] = struct{}{}
+		seen.add(line)
 	}
 
-	if !o.quiet {
-		hqgologger.Print(string(line))
+	if stdoutWriter != nil {
+		if _, err := stdoutWriter.Write(line); err != nil {
+			return fmt.Errorf("writing line to stdout: %w", err)
+		}
+
+		if err := stdoutWriter.WriteByte('\n'); err != nil {
+			return fmt.Errorf("writing line terminator to stdout: %w", err)
+		}
 	}
 
-	if writer != nil {
-		if _, err := writer.Write(line); err != nil {
+	if fileWriter != nil {
+		if _, err := fileWriter.Write(line); err != nil {
 			return fmt.Errorf("writing line: %w", err)
 		}
 
-		if err := writer.WriteByte('\n'); err != nil {
+		if err := fileWriter.WriteByte('\n'); err != nil {
 			return fmt.Errorf("writing line terminator: %w", err)
 		}
 	}
 
+	st.written++
+
 	return nil
 }
 
-func teardown(writer *bufio.Writer, file *os.File) (err error) {
-	if writer != nil {
-		if ferr := writer.Flush(); ferr != nil {
-			err = fmt.Errorf("flushing output: %w", ferr)
+func newStdoutWriter(o *options) (stdout *bufio.Writer) {
+	if o.quiet {
+		return nil
+	}
+
+	return bufio.NewWriterSize(os.Stdout, ioBufferSize)
+}
+
+func logStats(st *stats) {
+	hqgologger.Debug(fmt.Sprintf("processed %d lines: %d written, %d duplicates skipped", st.read, st.written, st.skipped))
+}
+
+func teardown(stdoutWriter, fileWriter *bufio.Writer, file *os.File) (err error) {
+	if stdoutWriter != nil {
+		if ferr := stdoutWriter.Flush(); ferr != nil {
+			err = errors.Join(err, fmt.Errorf("flushing stdout: %w", ferr))
+		}
+	}
+
+	if fileWriter != nil {
+		if ferr := fileWriter.Flush(); ferr != nil {
+			err = errors.Join(err, fmt.Errorf("flushing output: %w", ferr))
 		}
 	}
 
 	if file != nil {
-		if cerr := file.Close(); err == nil && cerr != nil {
-			err = fmt.Errorf("closing destination: %w", cerr)
+		if cerr := file.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("closing destination: %w", cerr))
 		}
 	}
 
 	return err
 }
 
-func loadSeen(o *options, destination string) (seen map[string]struct{}, err error) {
-	seen = make(map[string]struct{})
+func loadSeen(o *options, destination string) (seen *lineSet, err error) {
+	seen = newLineSet()
 
 	if !o.unique || !o.append || destination == "" {
 		return seen, nil
@@ -288,20 +357,22 @@ func loadSeen(o *options, destination string) (seen map[string]struct{}, err err
 	return seen, nil
 }
 
-func loadExistingLines(file string, lines map[string]struct{}) (err error) {
-	f, err := os.Open(file)
+func loadExistingLines(file string, lines *lineSet) (err error) {
+	f, err := os.Open(file) //nolint:gosec // the destination is user-provided by design
 	if err != nil {
 		return fmt.Errorf("opening %q: %w", file, err)
 	}
 
-	defer f.Close()
+	defer func() {
+		err = errors.Join(err, f.Close())
+	}()
 
 	scanner := bufio.NewScanner(f)
 
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineLength)
 
 	for scanner.Scan() {
-		lines[scanner.Text()] = struct{}{}
+		lines.add(scanner.Bytes())
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -312,11 +383,11 @@ func loadExistingLines(file string, lines map[string]struct{}) (err error) {
 }
 
 func getWriter(destination string, appendToFile bool) (file *os.File, err error) {
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destination), 0o750); err != nil {
 		return nil, fmt.Errorf("creating parent directories for %q: %w", destination, err)
 	}
 
-	flags := os.O_CREATE | os.O_WRONLY
+	flags := os.O_CREATE | os.O_RDWR
 
 	if appendToFile {
 		flags |= os.O_APPEND
@@ -324,10 +395,136 @@ func getWriter(destination string, appendToFile bool) (file *os.File, err error)
 		flags |= os.O_TRUNC
 	}
 
-	file, err = os.OpenFile(destination, flags, 0o644)
+	file, err = os.OpenFile(destination, flags, 0o644) //nolint:gosec // destination files are user data, conventionally world-readable like tee
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", destination, err)
 	}
 
+	if appendToFile {
+		if err := ensureTrailingNewline(file); err != nil {
+			_ = file.Close()
+
+			return nil, fmt.Errorf("preparing %q for append: %w", destination, err)
+		}
+	}
+
 	return file, nil
+}
+
+// ensureTrailingNewline appends a newline when the file is non-empty and its
+// last byte is not one, so the first appended line does not glue onto a
+// partial final line.
+func ensureTrailingNewline(file *os.File) (err error) {
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stating file: %w", err)
+	}
+
+	if info.Size() == 0 {
+		return nil
+	}
+
+	var last [1]byte
+
+	if _, err := file.ReadAt(last[:], info.Size()-1); err != nil {
+		return fmt.Errorf("reading last byte: %w", err)
+	}
+
+	if last[0] == '\n' {
+		return nil
+	}
+
+	if _, err := file.Write([]byte{'\n'}); err != nil {
+		return fmt.Errorf("appending newline: %w", err)
+	}
+
+	return nil
+}
+
+// lineSet is a memory-efficient set of line hashes. It stores one 64-bit hash
+// per unique line instead of the lines themselves, so memory usage is bounded
+// by the number of unique lines rather than their combined size. The trade-off
+// is a theoretically possible (astronomically unlikely) hash collision.
+type lineSet struct {
+	table []uint64
+	size  int
+	mask  uint64
+	seed  maphash.Seed
+}
+
+func newLineSet() (set *lineSet) {
+	set = &lineSet{
+		table: make([]uint64, 16),
+		seed:  maphash.MakeSeed(),
+	}
+
+	set.mask = uint64(len(set.table) - 1) //nolint:gosec // table is a positive power of two; no overflow possible
+
+	return set
+}
+
+func (set *lineSet) hash(line []byte) (hash uint64) {
+	hash = maphash.Bytes(set.seed, line)
+
+	// Zero is the empty-slot sentinel; remap a zero hash to keep it valid.
+	if hash == 0 {
+		hash = 1
+	}
+
+	return hash
+}
+
+func (set *lineSet) contains(line []byte) bool {
+	hash := set.hash(line)
+
+	for i := hash & set.mask; set.table[i] != 0; i = (i + 1) & set.mask {
+		if set.table[i] == hash {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (set *lineSet) add(line []byte) {
+	if set.contains(line) {
+		return
+	}
+
+	if set.size*2 >= len(set.table) {
+		set.grow()
+	}
+
+	hash := set.hash(line)
+	i := hash & set.mask
+
+	for set.table[i] != 0 {
+		i = (i + 1) & set.mask
+	}
+
+	set.table[i] = hash
+	set.size++
+}
+
+func (set *lineSet) grow() {
+	old := set.table
+
+	set.table = make([]uint64, len(old)*2)
+	set.mask = uint64(len(set.table) - 1) //nolint:gosec // table is a positive power of two; no overflow possible
+	set.size = 0
+
+	for _, hash := range old {
+		if hash == 0 {
+			continue
+		}
+
+		i := hash & set.mask
+
+		for set.table[i] != 0 {
+			i = (i + 1) & set.mask
+		}
+
+		set.table[i] = hash
+		set.size++
+	}
 }
