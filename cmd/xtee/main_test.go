@@ -16,7 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
+
+const lineA = "a\n"
 
 var xteePath string
 
@@ -30,25 +33,29 @@ func TestMain(m *testing.M) {
 	xteePath = filepath.Join(dir, "xtee")
 
 	if !buildBinary(xteePath) {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir) // test cleanup is best-effort
+
 		os.Exit(1)
 	}
 
 	code := m.Run()
 
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir) // test cleanup is best-effort
+
 	os.Exit(code)
 }
 
 func buildBinary(path string) (ok bool) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 
-	build := exec.CommandContext(ctx, "go", "build", "-race", "-o", path, ".")
+	defer cancel()
+
+	build := exec.CommandContext(ctx, "go", "build", "-race", "-o", path, ".") //nolint:gosec // tests build the binary under test
 
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "race build failed (%v), falling back to plain build:\n%s\n", err, out)
 
-		build = exec.CommandContext(ctx, "go", "build", "-o", path, ".")
+		build = exec.CommandContext(ctx, "go", "build", "-o", path, ".") //nolint:gosec // tests build the binary under test
 
 		if out, err := build.CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "build: %v\n%s\n", err, out)
@@ -63,7 +70,7 @@ func buildBinary(path string) (ok bool) {
 func runXtee(t *testing.T, stdin io.Reader, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 
-	cmd := exec.CommandContext(t.Context(), xteePath, args...)
+	cmd := exec.CommandContext(t.Context(), xteePath, args...) //nolint:gosec // tests execute the freshly built binary by design
 
 	cmd.Stdin = stdin
 
@@ -80,7 +87,7 @@ func runXtee(t *testing.T, stdin io.Reader, args ...string) (stdout, stderr stri
 func readFile(t *testing.T, path string) (content string) {
 	t.Helper()
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // reads test-fixture paths only
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
@@ -91,7 +98,7 @@ func readFile(t *testing.T, path string) (content string) {
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
@@ -269,7 +276,7 @@ func TestQuietSuppressesStdout(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
 
-	if got := readFile(t, dest); got != "a\n" {
+	if got := readFile(t, dest); got != lineA {
 		t.Errorf("file = %q, want %q", got, "a\\n")
 	}
 }
@@ -338,7 +345,178 @@ func TestShorthandFlags(t *testing.T) {
 
 	dest := filepath.Join(t.TempDir(), "out.txt")
 
-	if _, _, err := runXtee(t, strings.NewReader("a\n"), "-m", "-s", dest); err != nil {
+	stdout, stderr, err := runXtee(t, strings.NewReader("a\n"), "-m", "-s", dest)
+	if err != nil {
 		t.Fatalf("run with -m -s: %v", err)
+	}
+
+	if stdout != lineA {
+		t.Errorf("stdout = %q, want results despite -s", stdout)
+	}
+
+	if stderr != "" {
+		t.Errorf("stderr = %q, want logs suppressed by -s", stderr)
+	}
+
+	if got := readFile(t, dest); got != lineA {
+		t.Errorf("file = %q, want %q", got, "a\\n")
+	}
+}
+
+func TestSoakOverLimitLineRejected(t *testing.T) {
+	t.Parallel()
+
+	line := strings.Repeat("a", 8*1024*1024+1)
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	if _, _, err := runXtee(t, strings.NewReader(line+"\n"), "--soak", "--quiet", dest); err == nil {
+		t.Error("soak run with over-limit line: want non-zero exit status")
+	}
+}
+
+func TestAppendMissingTrailingNewline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Streamed", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "stuff.txt")
+
+		writeFile(t, dest, "one\ntwo")
+
+		if _, _, err := runXtee(t, strings.NewReader("three\n"), "--append", "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "one\ntwo\nthree\n" {
+			t.Errorf("file = %q, want %q", got, "one\\ntwo\\nthree\\n")
+		}
+	})
+
+	t.Run("Soak", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "stuff.txt")
+
+		writeFile(t, dest, "one\ntwo")
+
+		if _, _, err := runXtee(t, strings.NewReader("three\n"), "--soak", "--append", "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "one\ntwo\nthree\n" {
+			t.Errorf("file = %q, want %q", got, "one\\ntwo\\nthree\\n")
+		}
+	})
+}
+
+func TestCRLFInput(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Streamed", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "out.txt")
+
+		if _, _, err := runXtee(t, strings.NewReader("a\r\nb\r\n"), "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "a\nb\n" {
+			t.Errorf("file = %q, want %q", got, "a\\nb\\n")
+		}
+	})
+
+	t.Run("Soak", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "out.txt")
+
+		if _, _, err := runXtee(t, strings.NewReader("a\r\nb\r\n"), "--soak", "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "a\nb\n" {
+			t.Errorf("file = %q, want %q", got, "a\\nb\\n")
+		}
+	})
+}
+
+func TestEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Streamed", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "out.txt")
+
+		if _, _, err := runXtee(t, strings.NewReader(""), "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "" {
+			t.Errorf("file = %q, want empty", got)
+		}
+	})
+
+	t.Run("Soak", func(t *testing.T) {
+		t.Parallel()
+
+		dest := filepath.Join(t.TempDir(), "out.txt")
+
+		if _, _, err := runXtee(t, strings.NewReader(""), "--soak", "--quiet", dest); err != nil {
+			t.Fatalf("run: %v", err)
+		}
+
+		if got := readFile(t, dest); got != "" {
+			t.Errorf("file = %q, want empty", got)
+		}
+	})
+}
+
+func TestEmptyLines(t *testing.T) {
+	t.Parallel()
+
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	if _, _, err := runXtee(t, strings.NewReader("\n\n"), "--quiet", dest); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if got := readFile(t, dest); got != "\n\n" {
+		t.Errorf("file = %q, want two empty lines", got)
+	}
+}
+
+func TestExtraPositionalArgsRejected(t *testing.T) {
+	t.Parallel()
+
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	if _, _, err := runXtee(t, strings.NewReader("a\n"), "--quiet", dest, dest+".other"); err == nil {
+		t.Error("run with two destinations: want non-zero exit status")
+	}
+}
+
+func TestPreviewQuietRejected(t *testing.T) {
+	t.Parallel()
+
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	if _, _, err := runXtee(t, strings.NewReader("a\n"), "--preview", "--quiet", dest); err == nil {
+		t.Error("run with --preview --quiet: want non-zero exit status")
+	}
+}
+
+func TestHelpGoesToStdout(t *testing.T) {
+	t.Parallel()
+
+	stdout, _, err := runXtee(t, strings.NewReader(""), "-h")
+	if err != nil {
+		t.Fatalf("run with -h: %v", err)
+	}
+
+	if !strings.Contains(stdout, "USAGE:") {
+		t.Errorf("stdout = %q, want usage text", stdout)
 	}
 }
