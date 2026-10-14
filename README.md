@@ -19,7 +19,6 @@
 		- [In-Place Deduplicating Files](#in-place-deduplicating-files)
 		- [Appending Lines to File](#appending-lines-to-file)
 		- [Appending Unique Lines to File](#appending-unique-lines-to-file)
-	- [Performance Considerations](#performance-considerations)
 - [Contributing](#contributing)
 - [Licensing](#licensing)
 
@@ -139,13 +138,14 @@ INPUT:
 OUTPUT:
  -a, --append bool        append lines
  -u, --unique bool        unique lines
- -p, --preview bool       preview lines
+     --preview bool       preview lines
  -q, --quiet bool         suppress stdout
  -m, --monochrome bool    disable colored console output
  -s, --silent bool        disable logging output, only results
- -v, --verbose bool       enable detailed debug logging output
-
 ```
+
+> [!NOTE]
+> Streamed mode (the default, without `--soak`) is line-oriented: CRLF line endings are normalized to LF, a missing final newline is added, and a line longer than 8 MiB aborts the run — the destination may be left partial. Use `--soak` to buffer input and rewrite atomically. If the reader of the standard output goes away (broken pipe), `xtee` keeps writing the destination and exits with an error.
 
 ### Examples
 
@@ -154,6 +154,9 @@ OUTPUT:
 ```bash
 echo "zero" | xtee stuff.txt
 ```
+
+> [!WARNING]
+> Never run `xtee` against its own input file without `--soak` (for example, `cat stuff.txt | xtee stuff.txt` or `xtee stuff.txt < stuff.txt`): without `--soak` the destination is truncated before the input is fully read, which can destroy the file. See [In-Place Deduplicating Files](#in-place-deduplicating-files).
 
 ```bash
 cat stuff.txt
@@ -251,6 +254,9 @@ five
 
 > [!NOTE]
 > Note the use of `--soak`, it makes the utility soak up all its input before writing to a file. This is useful for reading from and writing to the same file in a single pipeline.
+
+> [!WARNING]
+> In-place processing without `--soak` is destructive: `cat stuff.txt | xtee stuff.txt` truncates the file before the reader has finished with it, and can leave it empty. When stdin is the destination file itself (`xtee stuff.txt < stuff.txt`), `xtee` now refuses to run without `--soak`; add `--soak` to make it safe.
 
 #### Appending Lines to File
 
@@ -370,13 +376,6 @@ zero
 four
 five
 ```
-
-### Performance Considerations
-
-- Stream processing (without `--soak`) is the most memory-efficient mode: memory use is constant, and lines are written as they arrive.
-- `--soak` buffers the entire input before writing (enabling safe in-place processing), using roughly the input size plus 8 bytes per line of memory - use it only when the input comfortably fits in RAM.
-- `--unique` keeps every unique line seen so far in memory, in both streaming and soak modes - be cautious with huge datasets.
-- Lines longer than 8 MB are rejected; processing stops with an error.
 
 ## Contributing
 

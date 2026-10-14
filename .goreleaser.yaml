@@ -1,6 +1,6 @@
 before:
     hooks:
-        - make go-mod-tidy
+        - make go-mod-check
 
 builds:
     -

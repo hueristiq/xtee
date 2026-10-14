@@ -88,7 +88,7 @@ install-lefthook:
 
 .PHONY: lefthook-initialize
 
-lefthook-initialize:
+lefthook-initialize: install-lefthook
 	@$(call log_header,Initializing lefthook...)
 	@if git rev-parse --git-dir >/dev/null 2>&1; \
 	then \
@@ -98,7 +98,7 @@ lefthook-initialize:
 	fi
 	@$(call log_success,Initializing lefthook...done!)
 
-.PHONY: go-mod-clean go-mod-tidy go-mod-update go-fmt go-lint go-test go-build go-install
+.PHONY: go-mod-clean go-mod-tidy go-mod-check go-mod-update go-fmt go-lint go-test go-build go-install
 
 go-mod-clean:
 	@$(call log_header,Cleaning Go module cache...)
@@ -109,6 +109,11 @@ go-mod-tidy:
 	@$(call log_header,Tidying Go modules...)
 	@go mod tidy || ( $(call log_error,Failed Tidying Go modules!) && exit 1 )
 	@$(call log_success,Tidying Go modules...done!)
+
+go-mod-check:
+	@$(call log_header,Checking Go module tidiness...)
+	@go mod tidy -diff || ( $(call log_error,Failed Checking Go module tidiness!) && exit 1 )
+	@$(call log_success,Checking Go module tidiness...done!)
 
 go-mod-update:
 	@$(call log_header,Updating Go modules...)
@@ -133,7 +138,7 @@ go-test:
 
 go-build:
 	@$(call log_header,Building Go program...)
-	@go build -v -ldflags "-s -w -X $(MODULE)/internal/configuration.version=$(VERSION)" -o bin/$(BINARY) cmd/$(BINARY)/main.go || ( $(call log_error,Failed Building Go program!) && exit 1 )
+	@go build -v -ldflags "-s -w -X $(MODULE)/internal/configuration.Version=$(VERSION)" -o bin/$(BINARY) cmd/$(BINARY)/main.go || ( $(call log_error,Failed Building Go program!) && exit 1 )
 	@$(call log_success,Building Go program...done!)
 
 go-install:
@@ -160,6 +165,7 @@ help:
 	@echo " $(COLOR_BOLD)$(COLOR_CYAN)...go:$(COLOR_RESET)"
 	@echo "   $(COLOR_GREEN)go-mod-clean$(COLOR_RESET) ................ Clean Go module cache."
 	@echo "   $(COLOR_GREEN)go-mod-tidy$(COLOR_RESET) ................. Tidy Go modules."
+	@echo "   $(COLOR_GREEN)go-mod-check$(COLOR_RESET) ................ Verify Go module tidiness."
 	@echo "   $(COLOR_GREEN)go-mod-update$(COLOR_RESET) ............... Update Go modules."
 	@echo "   $(COLOR_GREEN)go-fmt$(COLOR_RESET) ...................... Format Go code."
 	@echo "   $(COLOR_GREEN)go-lint$(COLOR_RESET) ..................... Lint Go code."

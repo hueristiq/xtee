@@ -1,12 +1,13 @@
 package input
 
-import "os"
+import (
+	"os"
 
-func HasStdin() bool {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
+	"golang.org/x/term"
+)
 
-	return (stat.Mode() & os.ModeCharDevice) == 0
+func HasStdin() (ok bool) {
+	ok = !term.IsTerminal(int(os.Stdin.Fd()))
+
+	return ok
 }

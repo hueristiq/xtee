@@ -41,7 +41,7 @@ jobs:
             -
                 name: Go Module Management
                 run: |
-                    make go-mod-tidy
+                    make go-mod-check
                 working-directory: .
             -
                 name: Go Build

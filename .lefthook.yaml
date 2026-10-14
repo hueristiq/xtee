@@ -2,5 +2,6 @@ pre-commit:
     commands:
         go-lint:
             run: make go-lint
+            stage_fixed: true
         go-test:
             run: make go-test
