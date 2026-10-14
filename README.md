@@ -137,9 +137,9 @@ INPUT:
      --soak bool          buffer input before processing
 
 OUTPUT:
-     --append bool        append lines
-     --unique bool        unique lines
-     --preview bool       preview lines
+ -a, --append bool        append lines
+ -u, --unique bool        unique lines
+ -p, --preview bool       preview lines
  -q, --quiet bool         suppress stdout
  -m, --monochrome bool    disable colored console output
  -s, --silent bool        disable logging output, only results

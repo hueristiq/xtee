@@ -20,11 +20,6 @@ import (
 	"github.com/hueristiq/xtee/internal/input"
 )
 
-const (
-	ioBufferSize  = 256 * 1024
-	maxLineLength = 8 * 1024 * 1024
-)
-
 type options struct {
 	soak       bool
 	append     bool
@@ -41,6 +36,18 @@ type stats struct {
 	written int
 	skipped int
 }
+
+type lineSet struct {
+	table []uint64
+	size  int
+	mask  uint64
+	seed  maphash.Seed
+}
+
+const (
+	ioBufferSize  = 256 * 1024
+	maxLineLength = 8 * 1024 * 1024
+)
 
 func main() {
 	o := parseFlags()
@@ -72,9 +79,9 @@ func parseFlags() (o *options) {
 	o = &options{}
 
 	pflag.BoolVar(&o.soak, "soak", false, "")
-	pflag.BoolVar(&o.append, "append", false, "")
-	pflag.BoolVar(&o.unique, "unique", false, "")
-	pflag.BoolVar(&o.preview, "preview", false, "")
+	pflag.BoolVarP(&o.append, "append", "a", false, "")
+	pflag.BoolVarP(&o.unique, "unique", "u", false, "")
+	pflag.BoolVarP(&o.preview, "preview", "p", false, "")
 	pflag.BoolVarP(&o.quiet, "quiet", "q", false, "")
 	pflag.BoolVarP(&o.monochrome, "monochrome", "m", false, "")
 	pflag.BoolVarP(&o.silent, "silent", "s", false, "")
@@ -92,9 +99,9 @@ func parseFlags() (o *options) {
 		h += "     --soak bool          buffer input before processing\n"
 
 		h += "\nOUTPUT:\n"
-		h += "     --append bool        append lines\n"
-		h += "     --unique bool        unique lines\n"
-		h += "     --preview bool       preview lines\n"
+		h += " -a, --append bool        append lines\n"
+		h += " -u, --unique bool        unique lines\n"
+		h += " -p, --preview bool       preview lines\n"
 		h += " -q, --quiet bool         suppress stdout\n"
 		h += " -m, --monochrome bool    disable colored console output\n"
 		h += " -s, --silent bool        disable logging output, only results\n"
@@ -109,14 +116,14 @@ func parseFlags() (o *options) {
 		Colorize: !o.monochrome,
 	}))
 
-	_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelInfo) // level constants are valid by construction
+	_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelInfo)
 
 	if o.verbose {
-		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug) // level constants are valid by construction
+		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelDebug)
 	}
 
 	if o.silent {
-		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent) // level constants are valid by construction
+		_ = hqgologger.DefaultLogger.SetLevel(hqgologgerlevels.LevelSilent)
 	}
 
 	return o
@@ -411,9 +418,6 @@ func getWriter(destination string, appendToFile bool) (file *os.File, err error)
 	return file, nil
 }
 
-// ensureTrailingNewline appends a newline when the file is non-empty and its
-// last byte is not one, so the first appended line does not glue onto a
-// partial final line.
 func ensureTrailingNewline(file *os.File) (err error) {
 	info, err := file.Stat()
 	if err != nil {
@@ -441,17 +445,6 @@ func ensureTrailingNewline(file *os.File) (err error) {
 	return nil
 }
 
-// lineSet is a memory-efficient set of line hashes. It stores one 64-bit hash
-// per unique line instead of the lines themselves, so memory usage is bounded
-// by the number of unique lines rather than their combined size. The trade-off
-// is a theoretically possible (astronomically unlikely) hash collision.
-type lineSet struct {
-	table []uint64
-	size  int
-	mask  uint64
-	seed  maphash.Seed
-}
-
 func newLineSet() (set *lineSet) {
 	set = &lineSet{
 		table: make([]uint64, 16),
@@ -466,7 +459,6 @@ func newLineSet() (set *lineSet) {
 func (set *lineSet) hash(line []byte) (hash uint64) {
 	hash = maphash.Bytes(set.seed, line)
 
-	// Zero is the empty-slot sentinel; remap a zero hash to keep it valid.
 	if hash == 0 {
 		hash = 1
 	}
@@ -496,6 +488,7 @@ func (set *lineSet) add(line []byte) {
 	}
 
 	hash := set.hash(line)
+
 	i := hash & set.mask
 
 	for set.table[i] != 0 {
