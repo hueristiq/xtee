@@ -9,7 +9,7 @@ require (
 
 require (
 	github.com/hueristiq/hq-lib-logger-go v0.0.0-20261011132023-c2e708c1233d
-	golang.org/x/term v0.47.0
+	golang.org/x/term v0.48.0
 )
 
-require golang.org/x/sys v0.49.0 // indirect
+require golang.org/x/sys v0.50.0 // indirect
